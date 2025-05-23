@@ -1,0 +1,98 @@
+{
+    "topic": "人工智能将取代还是增强人类创造力",
+    "affirmative": {
+        "school": "科技大学",
+        "viewpoint": "人工智能将**增强**人类创造力",
+        "debaters": {
+            "first": "张三",
+            "second": "李四",
+            "third": "王五",
+            "fourth": "赵六"
+        }
+    },
+    "negative": {
+        "school": "文学学院",
+        "viewpoint": "人工智能将**取代**人类创造力",
+        "debaters": {
+            "first": "钱一",
+            "second": "孙二",
+            "third": "周三",
+            "fourth": "吴四"
+        }
+    },
+    "rounds": [
+        {
+            "side": "affirmative",
+            "speaker": "一辩",
+            "type": "立论",
+            "time": 180,
+            "description": "正方一辩立论陈词"
+        },
+        {
+            "side": "negative",
+            "speaker": "一辩",
+            "type": "立论",
+            "time": 180,
+            "description": "反方一辩立论陈词"
+        },
+        {
+            "side": "affirmative",
+            "speaker": "二辩",
+            "type": "质询",
+            "time": 120,
+            "description": "正方二辩对反方一辩质询"
+        },
+        {
+            "side": "negative",
+            "speaker": "二辩",
+            "type": "质询",
+            "time": 120,
+            "description": "反方二辩对正方一辩质询"
+        },
+        {
+            "side": "affirmative",
+            "speaker": "三辩",
+            "type": "驳论",
+            "time": 180,
+            "description": "正方三辩驳论"
+        },
+        {
+            "side": "negative",
+            "speaker": "三辩",
+            "type": "驳论",
+            "time": 180,
+            "description": "反方三辩驳论"
+        },
+        {
+            "side": "affirmative",
+            "speaker": "四辩",
+            "type": "总结陈词",
+            "time": 180,
+            "description": "正方四辩总结陈词"
+        },
+        {
+            "side": "negative",
+            "speaker": "四辩",
+            "type": "总结陈词",
+            "time": 180,
+            "description": "反方四辩总结陈词"
+        },
+        {
+            "side": "affirmative",
+            "speaker": "自由辩手",
+            "type": "自由辩论",
+            "time": 300,
+            "description": "双方自由辩论环节"
+        }
+    ],
+    "debater_roles": {
+        "affirmative_first": "张三",
+        "affirmative_second": "李四", 
+        "affirmative_third": "王五",
+        "affirmative_fourth": "赵六",
+        "negative_first": "钱一",
+        "negative_second": "孙二", 
+        "negative_third": "周三",
+        "negative_fourth": "吴四"
+    }
+}

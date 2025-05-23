@@ -1,0 +1,3 @@
+# 辩论赛计时系统依赖
+PyQt5>=5.15.2
+pywin32>=300 ; sys_platform == 'win32'
