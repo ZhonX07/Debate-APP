@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import QFrame, QApplication
 from PyQt5.QtCore import Qt, QRectF
 from PyQt5.QtGui import QPainter, QColor, QPen, QLinearGradient, QBrush
 #123123
-# 配置日志
+# 配置日志1
 log_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'logs'))
 try:
     os.makedirs(log_dir, exist_ok=True)

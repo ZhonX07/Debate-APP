@@ -359,7 +359,6 @@ class ControlPanel(QMainWindow):
             
             # 更新显示面板配置
             self.display_board.set_debate_config(config.to_dict())
-            
             # 更新环节列表
             self.rounds_list.clear()
             for index, round_info in enumerate(config.get_rounds()):

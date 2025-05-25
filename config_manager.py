@@ -93,8 +93,7 @@ class DebateConfig:
             if not isinstance(round_data['time'], int) or round_data['time'] <= 0:
                 raise ConfigValidationError(
                     f"第 {i+1} 个回合的 time 字段必须是正整数"
-                )
-        
+                )  
         # 验证辩手角色字段
         if 'debater_roles' in self.data:
             if not isinstance(self.data['debater_roles'], dict):

@@ -77,7 +77,7 @@ def enable_acrylic_effect(hwnd, color):
                 ('SizeOfData', ctypes.c_size_t)
             ]
         
-        # 设置亚克力模糊
+        # 设置亚克力模糊1
         policy = AccentPolicy()
         policy.AccentState = 3  # ACCENT_ENABLE_BLURBEHIND
         policy.GradientColor = color  # ARGB颜色

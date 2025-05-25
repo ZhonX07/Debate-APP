@@ -180,7 +180,7 @@ class DisplayBoard(QMainWindow):
         self.affirmative_layout.addWidget(affirmative_separator)
         self.affirmative_layout.addWidget(self.affirmative_viewpoint_label)
         
-        # 添加辩手信息框 - 优化为更醒目的样式
+
         self.aff_debaters_frame = QFrame()
         self.aff_debaters_frame.setStyleSheet("""
             background-color: rgba(0, 120, 212, 0.15); 

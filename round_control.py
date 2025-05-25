@@ -13,7 +13,7 @@ class RoundData:
         self.speaker = speaker  # 发言方 (0=正方, 1=反方)
         self.duration = duration  # 时间(秒)
 
-# 标准辩论赛回合配置
+# 标准辩论赛回合配置1
 STANDARD_DEBATE_ROUNDS = [
     RoundData("正方一辩陈词", 0, 180),  # 3分钟
     RoundData("反方一辩陈词", 1, 180),  # 3分钟

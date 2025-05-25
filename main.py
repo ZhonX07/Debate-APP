@@ -93,7 +93,6 @@ def main():
             QTimer.singleShot(500, lambda: load_config_and_log(control_panel, args.config))
         except Exception as e:
             logger.error(f"自动加载配置文件失败: {e}")
-    
     # 运行应用
     return app.exec_()
 

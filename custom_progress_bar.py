@@ -5,7 +5,6 @@ import logging
 import math
 
 logger = logging.getLogger('debate_app.custom_progress_bar')
-
 class CircularProgressBar(QProgressBar):
     """空心环形进度条"""
     
