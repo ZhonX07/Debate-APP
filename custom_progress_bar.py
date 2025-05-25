@@ -129,26 +129,78 @@ class DynamicIslandManager:
     def force_clear_all(self):
         """强制立即清除所有元素和文本"""
         logger.info("强制清除灵动岛所有内容")
-        # 立即停止所有动画
-        for anim in self.animations:
-            if anim and anim.state() == anim.Running:
-                anim.stop()
-        self.animations.clear()
-        
-        # 清除当前元素
-        self.current_elements.clear()
-        
-        # 如果有父控件，强制重绘
-        if self.parent:
-            self.parent.update()
-            self.parent.repaint()
-            # 强制处理所有待处理事件
+        try:
+            # 立即停止所有动画
+            for anim in self.animations:
+                if anim and anim.state() == anim.Running:
+                    anim.stop()
+            self.animations.clear()
+            
+            # 清除当前元素
+            self.current_elements.clear()
+            
+            # 如果有父控件，强制重绘
+            if self.parent:
+                # 隐藏父控件以避免渲染重叠
+                was_visible = self.parent.isVisible()
+                self.parent.setVisible(False)
+                
+                # 强制处理所有待处理事件
+                try:
+                    from PyQt5.QtWidgets import QApplication
+                    QApplication.processEvents()
+                except ImportError:
+                    logger.warning("无法导入 QApplication，跳过 processEvents 调用")
+                
+                # 强制清除和重绘
+                self.parent.update()
+                self.parent.repaint()
+                
+                # 恢复可见性
+                if was_visible:
+                    self.parent.setVisible(True)
+                    
+        except Exception as e:
+            logger.error(f"强制清除灵动岛内容时出错: {e}", exc_info=True)
+
+    def force_text_update(self, target_widget, new_text, style=""):
+        """强制更新文本，确保没有残留"""
+        try:
+            if not target_widget:
+                return
+                
+            # 隐藏控件
+            was_visible = target_widget.isVisible()
+            target_widget.setVisible(False)
+            
+            # 清除旧文本
+            target_widget.clear()
+            target_widget.setStyleSheet("")
+            
+            # 强制处理事件
             try:
                 from PyQt5.QtWidgets import QApplication
                 QApplication.processEvents()
             except ImportError:
-                # 如果导入失败，记录警告但不中断程序
-                logger.warning("无法导入 QApplication，跳过 processEvents 调用")
+                pass
+            
+            # 设置新文本和样式
+            target_widget.setText(new_text)
+            if style:
+                target_widget.setStyleSheet(style)
+            
+            # 强制重绘
+            target_widget.update()
+            target_widget.repaint()
+            
+            # 恢复可见性
+            if was_visible:
+                target_widget.setVisible(True)
+                target_widget.update()
+                target_widget.repaint()
+                
+        except Exception as e:
+            logger.error(f"强制文本更新时出错: {e}", exc_info=True)
 
     def animate_elements_out(self):
         logger.info("执行现有元素的下沉动画")
