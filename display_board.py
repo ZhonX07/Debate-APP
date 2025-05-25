@@ -664,6 +664,7 @@ class DisplayBoard(QMainWindow):
         self.active_round_widget_top.setGraphicsEffect(opacity_effect_active)
 
     def _update_active_round_widget_top_content(self):
+        """更新活动控件内容"""
         if not self.current_round:
             return
         
@@ -671,15 +672,18 @@ class DisplayBoard(QMainWindow):
         current_round = self.current_round
         side = "正方" if current_round['side'] == 'affirmative' else "反方"
         side_color = "#0078D4" if current_round['side'] == 'affirmative' else "#C42B1C"
-        # 检查是否是自由辩论环节
         self.is_free_debate = current_round.get('type') == "自由辩论"
         
         total = max(current_round.get('time', 0), 1)
         
+        # 直接更新控件内容
+        self.active_round_title.setText(current_round.get('description', "当前环节"))
+        self.active_speaker_info.setText(f"{side} {current_round['speaker']} - {current_round['type']}")
+        self.active_speaker_info.setStyleSheet(f"color: {side_color}; font-weight: bold;")
+        
         if self.is_free_debate:
             # 自由辩论模式 - 设置双计时器
             half_time = total // 2
-            # 正方计时器
             self.aff_progress_bar.setRange(0, half_time)
             self.aff_progress_bar.setValue(0)
             self.affirmative_time = half_time
@@ -687,7 +691,6 @@ class DisplayBoard(QMainWindow):
             seconds = self.affirmative_time % 60
             self.aff_countdown_label.setText(f"{minutes:02d}:{seconds:02d}")
             
-            # 反方计时器
             self.neg_progress_bar.setRange(0, half_time)
             self.neg_progress_bar.setValue(0)
             self.negative_time = half_time
@@ -695,7 +698,6 @@ class DisplayBoard(QMainWindow):
             seconds = self.negative_time % 60
             self.neg_countdown_label.setText(f"{minutes:02d}:{seconds:02d}")
             
-            # 切换到自由辩论计时器界面
             self.timer_stack.setCurrentIndex(1)
         else:
             # 标准模式 - 设置单个计时器
@@ -703,21 +705,11 @@ class DisplayBoard(QMainWindow):
             self.active_progress_bar_top.setRange(0, total)
             self.active_progress_bar_top.setValue(0)
             
-            # 设置倒计时文本
             minutes = total // 60
             seconds = total % 60
             self.countdown_label.setText(f"{minutes:02d}:{seconds:02d}")
             
-            # 切换到标准计时器界面
             self.timer_stack.setCurrentIndex(0)
-            
-            # 设置发言方信息
-            speaker_info = f"{side} {current_round['speaker']} - {current_round['type']}"
-            self.active_speaker_info.setText(speaker_info)
-            self.active_speaker_info.setStyleSheet(f"color: {side_color}; font-weight: bold;")
-            
-            # 设置标题
-            self.active_round_title.setText(current_round['description'] if 'description' in current_round else "当前环节")
         
         # 更新下一环节信息
         next_round_idx = self.current_round_index + 1
@@ -1011,11 +1003,7 @@ class DisplayBoard(QMainWindow):
                     self.countdown_label.setStyleSheet("color: #323130; font-weight: bold;")
 
     def _update_preview_widget_top_content(self, index=None):
-        """更新预览控件内容，先清除旧内容再设置新内容
-    
-        Args:
-            index: 要预览的环节索引，如果为None则使用下一个环节
-        """
+        """更新预览控件内容"""
         if not self.rounds:
             return
         
@@ -1030,18 +1018,7 @@ class DisplayBoard(QMainWindow):
             
         round_info = self.rounds[index]
         
-        # 先清除所有标签内容
-        self.preview_title_label.clear()
-        self.preview_type_label.clear()
-        self.preview_desc_label.clear()
-        self.preview_time_label.clear()
-        
-        # 使用QTimer延迟一小段时间后再设置新内容，确保先前内容已清除
-        QTimer.singleShot(10, lambda: self._set_preview_content(round_info, index))
-
-    def _set_preview_content(self, round_info, index):
-        """设置预览内容，在清除旧内容后调用"""
-        # 设置标题和类型
+        # 直接更新控件内容
         self.preview_title_label.setText("下一环节:")
         self.preview_type_label.setText(round_info['type'])
         # 如果是自由辩论，特别标记
@@ -1149,7 +1126,7 @@ class DisplayBoard(QMainWindow):
             
         round_info = self.rounds[index]
         
-        # 设置标题和类型
+        # 直接更新控件内容
         self.preview_title_label.setText("下一环节:")
         self.preview_type_label.setText(round_info['type'])
         # 如果是自由辩论，特别标记
