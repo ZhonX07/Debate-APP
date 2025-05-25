@@ -4,7 +4,7 @@
 from PyQt5.QtWidgets import (QMainWindow, QLabel, QVBoxLayout, QHBoxLayout, 
                             QWidget, QFrame, QGraphicsDropShadowEffect, 
                             QGroupBox, QStackedLayout, QSizePolicy, QMessageBox, QStyle,
-                            QGraphicsOpacityEffect, QGraphicsColorizeEffect)
+                            QGraphicsOpacityEffect, QGraphicsColorizeEffect, QGridLayout)
 from PyQt5.QtCore import (Qt, QTimer, QPropertyAnimation, QEasingCurve, 
                         QParallelAnimationGroup, QTime, pyqtSignal, pyqtSlot)
 from PyQt5.QtGui import QFont, QColor
@@ -179,6 +179,102 @@ class DisplayBoard(QMainWindow):
         self.affirmative_layout.addWidget(self.affirmative_school_label)
         self.affirmative_layout.addWidget(affirmative_separator)
         self.affirmative_layout.addWidget(self.affirmative_viewpoint_label)
+        
+        # 添加辩手信息框 - 优化为更醒目的样式
+        self.aff_debaters_frame = QFrame()
+        self.aff_debaters_frame.setStyleSheet("""
+            background-color: rgba(0, 120, 212, 0.15); 
+            border-radius: 10px; 
+            padding: 10px;
+            border: 2px solid rgba(0, 120, 212, 0.3);
+        """)
+        aff_debaters_layout = QVBoxLayout(self.aff_debaters_frame)
+        aff_debaters_layout.setContentsMargins(10, 10, 10, 10)
+        aff_debaters_layout.setSpacing(10)
+        
+        # 创建辩手信息标题
+        aff_debaters_title = QLabel("辩手阵容")
+        aff_debaters_title.setAlignment(Qt.AlignCenter)
+        aff_debaters_title.setFont(QFont("微软雅黑", 16, QFont.Bold))
+        aff_debaters_title.setStyleSheet("color: #0078D4; border: none;")
+        aff_debaters_layout.addWidget(aff_debaters_title)
+        
+        # 创建辩手网格布局
+        aff_debaters_grid = QGridLayout()
+        aff_debaters_grid.setSpacing(15)  # 增加间距
+        aff_debaters_grid.setVerticalSpacing(20)  # 增加垂直间距
+        
+        # 创建辩手标签 - 使用更醒目的样式
+        self.aff_1_role = QLabel("一辩")
+        self.aff_1_role.setFont(QFont("微软雅黑", 13, QFont.Bold))
+        self.aff_1_role.setStyleSheet("""
+            color: white; 
+            background-color: #0078D4; 
+            padding: 3px 8px;
+            border-radius: 4px;
+        """)
+        self.aff_1_role.setAlignment(Qt.AlignCenter)
+        self.aff_1_label = QLabel("待定")
+        self.aff_1_label.setFont(QFont("微软雅黑", 14))  # 增大字体
+        self.aff_1_label.setStyleSheet("letter-spacing: 1px;")  # 增加字间距
+        
+        self.aff_2_role = QLabel("二辩")
+        self.aff_2_role.setFont(QFont("微软雅黑", 13, QFont.Bold))
+        self.aff_2_role.setStyleSheet("""
+            color: white; 
+            background-color: #0078D4;
+            padding: 3px 8px;
+            border-radius: 4px;
+        """)
+        self.aff_2_role.setAlignment(Qt.AlignCenter)
+        self.aff_2_label = QLabel("待定")
+        self.aff_2_label.setFont(QFont("微软雅黑", 14))
+        self.aff_2_label.setStyleSheet("letter-spacing: 1px;")
+        
+        self.aff_3_role = QLabel("三辩")
+        self.aff_3_role.setFont(QFont("微软雅黑", 13, QFont.Bold))
+        self.aff_3_role.setStyleSheet("""
+            color: white; 
+            background-color: #0078D4;
+            padding: 3px 8px;
+            border-radius: 4px;
+        """)
+        self.aff_3_role.setAlignment(Qt.AlignCenter)
+        self.aff_3_label = QLabel("待定")
+        self.aff_3_label.setFont(QFont("微软雅黑", 14))
+        self.aff_3_label.setStyleSheet("letter-spacing: 1px;")
+        
+        self.aff_4_role = QLabel("四辩")
+        self.aff_4_role.setFont(QFont("微软雅黑", 13, QFont.Bold))
+        self.aff_4_role.setStyleSheet("""
+            color: white; 
+            background-color: #0078D4;
+            padding: 3px 8px;
+            border-radius: 4px;
+        """)
+        self.aff_4_role.setAlignment(Qt.AlignCenter)
+        self.aff_4_label = QLabel("待定")
+        self.aff_4_label.setFont(QFont("微软雅黑", 14))
+        self.aff_4_label.setStyleSheet("letter-spacing: 1px;")
+        
+        # 为每个辩手角色设置固定宽度
+        self.aff_1_role.setFixedWidth(60)
+        self.aff_2_role.setFixedWidth(60)
+        self.aff_3_role.setFixedWidth(60)
+        self.aff_4_role.setFixedWidth(60)
+        
+        # 添加辩手到网格
+        aff_debaters_grid.addWidget(self.aff_1_role, 0, 0)
+        aff_debaters_grid.addWidget(self.aff_1_label, 0, 1)
+        aff_debaters_grid.addWidget(self.aff_2_role, 0, 2)
+        aff_debaters_grid.addWidget(self.aff_2_label, 0, 3)
+        aff_debaters_grid.addWidget(self.aff_3_role, 1, 0)
+        aff_debaters_grid.addWidget(self.aff_3_label, 1, 1)
+        aff_debaters_grid.addWidget(self.aff_4_role, 1, 2)
+        aff_debaters_grid.addWidget(self.aff_4_label, 1, 3)
+        
+        aff_debaters_layout.addLayout(aff_debaters_grid)
+        self.affirmative_layout.addWidget(self.aff_debaters_frame)
         self.affirmative_layout.addStretch()
         
         # 创建反方（右侧）部件 - 使用渐变边框
@@ -220,6 +316,102 @@ class DisplayBoard(QMainWindow):
         self.negative_layout.addWidget(self.negative_school_label)
         self.negative_layout.addWidget(negative_separator)
         self.negative_layout.addWidget(self.negative_viewpoint_label)
+        
+        # 添加反方辩手信息框 - 与正方保持一致的样式但使用反方颜色
+        self.neg_debaters_frame = QFrame()
+        self.neg_debaters_frame.setStyleSheet("""
+            background-color: rgba(209, 52, 56, 0.15); 
+            border-radius: 10px; 
+            padding: 10px;
+            border: 2px solid rgba(209, 52, 56, 0.3);
+        """)
+        neg_debaters_layout = QVBoxLayout(self.neg_debaters_frame)
+        neg_debaters_layout.setContentsMargins(10, 10, 10, 10)
+        neg_debaters_layout.setSpacing(10)
+        
+        # 创建辩手信息标签
+        neg_debaters_title = QLabel("辩手阵容")
+        neg_debaters_title.setAlignment(Qt.AlignCenter)
+        neg_debaters_title.setFont(QFont("微软雅黑", 16, QFont.Bold))
+        neg_debaters_title.setStyleSheet("color: #D13438; border: none;")
+        neg_debaters_layout.addWidget(neg_debaters_title)
+        
+        # 创建辩手网格布局
+        neg_debaters_grid = QGridLayout()
+        neg_debaters_grid.setSpacing(15)  # 增加间距
+        neg_debaters_grid.setVerticalSpacing(20)  # 增加垂直间距
+        
+        # 创建辩手标签 - 使用相同的醒目样式但反方色系
+        self.neg_1_role = QLabel("一辩")
+        self.neg_1_role.setFont(QFont("微软雅黑", 13, QFont.Bold))
+        self.neg_1_role.setStyleSheet("""
+            color: white; 
+            background-color: #D13438; 
+            padding: 3px 8px;
+            border-radius: 4px;
+        """)
+        self.neg_1_role.setAlignment(Qt.AlignCenter)
+        self.neg_1_label = QLabel("待定")
+        self.neg_1_label.setFont(QFont("微软雅黑", 14))
+        self.neg_1_label.setStyleSheet("letter-spacing: 1px;")
+        
+        self.neg_2_role = QLabel("二辩")
+        self.neg_2_role.setFont(QFont("微软雅黑", 13, QFont.Bold))
+        self.neg_2_role.setStyleSheet("""
+            color: white; 
+            background-color: #D13438;
+            padding: 3px 8px;
+            border-radius: 4px;
+        """)
+        self.neg_2_role.setAlignment(Qt.AlignCenter)
+        self.neg_2_label = QLabel("待定")
+        self.neg_2_label.setFont(QFont("微软雅黑", 14))
+        self.neg_2_label.setStyleSheet("letter-spacing: 1px;")
+        
+        self.neg_3_role = QLabel("三辩")
+        self.neg_3_role.setFont(QFont("微软雅黑", 13, QFont.Bold))
+        self.neg_3_role.setStyleSheet("""
+            color: white; 
+            background-color: #D13438;
+            padding: 3px 8px;
+            border-radius: 4px;
+        """)
+        self.neg_3_role.setAlignment(Qt.AlignCenter)
+        self.neg_3_label = QLabel("待定")
+        self.neg_3_label.setFont(QFont("微软雅黑", 14))
+        self.neg_3_label.setStyleSheet("letter-spacing: 1px;")
+        
+        self.neg_4_role = QLabel("四辩")
+        self.neg_4_role.setFont(QFont("微软雅黑", 13, QFont.Bold))
+        self.neg_4_role.setStyleSheet("""
+            color: white; 
+            background-color: #D13438;
+            padding: 3px 8px;
+            border-radius: 4px;
+        """)
+        self.neg_4_role.setAlignment(Qt.AlignCenter)
+        self.neg_4_label = QLabel("待定")
+        self.neg_4_label.setFont(QFont("微软雅黑", 14))
+        self.neg_4_label.setStyleSheet("letter-spacing: 1px;")
+        
+        # 为每个辩手角色设置固定宽度
+        self.neg_1_role.setFixedWidth(60)
+        self.neg_2_role.setFixedWidth(60)
+        self.neg_3_role.setFixedWidth(60)
+        self.neg_4_role.setFixedWidth(60)
+        
+        # 添加辩手到网格
+        neg_debaters_grid.addWidget(self.neg_1_role, 0, 0)
+        neg_debaters_grid.addWidget(self.neg_1_label, 0, 1)
+        neg_debaters_grid.addWidget(self.neg_2_role, 0, 2)
+        neg_debaters_grid.addWidget(self.neg_2_label, 0, 3)
+        neg_debaters_grid.addWidget(self.neg_3_role, 1, 0)
+        neg_debaters_grid.addWidget(self.neg_3_label, 1, 1)
+        neg_debaters_grid.addWidget(self.neg_4_role, 1, 2)
+        neg_debaters_grid.addWidget(self.neg_4_label, 1, 3)
+        
+        neg_debaters_layout.addLayout(neg_debaters_grid)
+        self.negative_layout.addWidget(self.neg_debaters_frame)
         self.negative_layout.addStretch()
         
         sides_layout.addWidget(affirmative_widget)
@@ -1014,6 +1206,39 @@ class DisplayBoard(QMainWindow):
             config: 包含辩论信息的字典，包括题目、学校、辩手和环节
         """
         logger.info("设置辩论配置")
+        # 清除所有相关显示内容
+        self.topic = ""
+        self.affirmative_school = ""
+        self.affirmative_viewpoint = ""
+        self.negative_school = ""
+        self.negative_viewpoint = ""
+        self.debater_roles = {}
+        self.rounds = []
+        self.current_round = None
+        self.current_round_index = -1
+        self.current_time = 0
+        self.affirmative_time = 0
+        self.negative_time = 0
+        self.timer_active = False
+        self.affirmative_timer_active = False
+        self.negative_timer_active = False
+        self.is_free_debate = False
+        # 清空界面标签
+        self.affirmative_school_label.setText("")
+        self.affirmative_viewpoint_label.setText("")
+        self.negative_school_label.setText("")
+        self.negative_viewpoint_label.setText("")
+        # 立即清空预览区内容
+        if hasattr(self, 'preview_title_label'):
+            self.preview_title_label.clear()
+        if hasattr(self, 'preview_type_label'):
+            self.preview_type_label.clear()
+        if hasattr(self, 'preview_desc_label'):
+            self.preview_desc_label.clear()
+        if hasattr(self, 'preview_time_label'):
+            self.preview_time_label.clear()
+        if hasattr(self, 'next_round_info'):
+            self.next_round_info.setText("")
         # 设置辩题和学校信息
         if 'topic' in config:
             self.topic = config['topic']
@@ -1063,27 +1288,197 @@ class DisplayBoard(QMainWindow):
         logger.debug("更新辩手信息")
         try:
             roles = self.debater_roles
-            # 这里假设UI中已定义了相应标签，实际应根据具体UI布局调整
-            if hasattr(self, 'chair_label') and 'chair' in roles:
-                self.chair_label.setText(roles['chair'])
-            if hasattr(self, 'recorder_label') and 'recorder' in roles:
-                self.recorder_label.setText(roles['recorder'])
+            
+            # 更新正方辩手信息
+            if 'affirmative_first' in roles:
+                self.aff_1_label.setText(roles['affirmative_first'])
+            if 'affirmative_second' in roles:
+                self.aff_2_label.setText(roles['affirmative_second'])
+            if 'affirmative_third' in roles:
+                self.aff_3_label.setText(roles['affirmative_third'])
+            if 'affirmative_fourth' in roles:
+                self.aff_4_label.setText(roles['affirmative_fourth'])
                 
-            # 添加正方辩手信息
-            for i in range(1, 5):
-                role_key = f"affirmative_{i}"
-                if role_key in roles and hasattr(self, f'aff_{i}_label'):
-                    getattr(self, f'aff_{i}_label').setText(roles[role_key])
-                    
-            # 添加反方辩手信息
-            for i in range(1, 5):
-                role_key = f"negative_{i}"
-                if role_key in roles and hasattr(self, f'neg_{i}_label'):
-                    getattr(self, f'neg_{i}_label').setText(roles[role_key])
+            # 更新反方辩手信息
+            if 'negative_first' in roles:
+                self.neg_1_label.setText(roles['negative_first'])
+            if 'negative_second' in roles:
+                self.neg_2_label.setText(roles['negative_second'])
+            if 'negative_third' in roles:
+                self.neg_3_label.setText(roles['negative_third'])
+            if 'negative_fourth' in roles:
+                self.neg_4_label.setText(roles['negative_fourth'])
+            
+            # 高亮当前环节的活跃辩手
+            self._highlight_active_debater()
             
             logger.debug("辩手信息更新完成")
         except Exception as e:
             logger.error(f"更新辩手信息时出错: {e}", exc_info=True)
+    
+    def _highlight_active_debater(self):
+        """高亮显示当前环节的活跃辩手 - 强化视觉效果"""
+        try:
+            # 先重置所有辩手标签的样式
+            self.aff_1_label.setStyleSheet("letter-spacing: 1px;")
+            self.aff_2_label.setStyleSheet("letter-spacing: 1px;")
+            self.aff_3_label.setStyleSheet("letter-spacing: 1px;")
+            self.aff_4_label.setStyleSheet("letter-spacing: 1px;")
+            self.neg_1_label.setStyleSheet("letter-spacing: 1px;")
+            self.neg_2_label.setStyleSheet("letter-spacing: 1px;")
+            self.neg_3_label.setStyleSheet("letter-spacing: 1px;")
+            self.neg_4_label.setStyleSheet("letter-spacing: 1px;")
+            
+            # 如果有当前环节，则高亮相应辩手
+            if self.current_round:
+                side = self.current_round.get('side')
+                speaker = self.current_round.get('speaker', '')
+                
+                # 根据speaker类型确定是哪位辩手
+                if side == 'affirmative':
+                    if '一辩' in speaker or '一号' in speaker:
+                        self.aff_1_label.setStyleSheet("""
+                            font-weight: bold; 
+                            color: #0078D4; 
+                            letter-spacing: 1px;
+                            background-color: rgba(0, 120, 212, 0.1);
+                            border-radius: 4px;
+                            padding: 2px 5px;
+                            font-size: 16px;
+                        """)
+                    elif '二辩' in speaker or '二号' in speaker:
+                        self.aff_2_label.setStyleSheet("""
+                            font-weight: bold; 
+                            color: #0078D4; 
+                            letter-spacing: 1px;
+                            background-color: rgba(0, 120, 212, 0.1);
+                            border-radius: 4px;
+                            padding: 2px 5px;
+                            font-size: 16px;
+                        """)
+                    elif '三辩' in speaker or '三号' in speaker:
+                        self.aff_3_label.setStyleSheet("""
+                            font-weight: bold; 
+                            color: #0078D4; 
+                            letter-spacing: 1px;
+                            background-color: rgba(0, 120, 212, 0.1);
+                            border-radius: 4px;
+                            padding: 2px 5px;
+                            font-size: 16px;
+                        """)
+                    elif '四辩' in speaker or '四号' in speaker:
+                        self.aff_4_label.setStyleSheet("""
+                            font-weight: bold; 
+                            color: #0078D4; 
+                            letter-spacing: 1px;
+                            background-color: rgba(0, 120, 212, 0.1);
+                            border-radius: 4px;
+                            padding: 2px 5px;
+                            font-size: 16px;
+                        """)
+                    elif '自由辩手' in speaker:
+                        # 自由辩论时高亮所有辩手
+                        self.aff_1_label.setStyleSheet("""
+                            font-weight: bold; 
+                            color: #0078D4; 
+                            letter-spacing: 1px;
+                            background-color: rgba(0, 120, 212, 0.1);
+                            padding: 2px 5px;
+                        """)
+                        self.aff_2_label.setStyleSheet("""
+                            font-weight: bold; 
+                            color: #0078D4; 
+                            letter-spacing: 1px;
+                            background-color: rgba(0, 120, 212, 0.1);
+                            padding: 2px 5px;
+                        """)
+                        self.aff_3_label.setStyleSheet("""
+                            font-weight: bold; 
+                            color: #0078D4; 
+                            letter-spacing: 1px;
+                            background-color: rgba(0, 120, 212, 0.1);
+                            padding: 2px 5px;
+                        """)
+                        self.aff_4_label.setStyleSheet("""
+                            font-weight: bold; 
+                            color: #0078D4; 
+                            letter-spacing: 1px;
+                            background-color: rgba(0, 120, 212, 0.1);
+                            padding: 2px 5px;
+                        """)
+                elif side == 'negative':
+                    if '一辩' in speaker or '一号' in speaker:
+                        self.neg_1_label.setStyleSheet("""
+                            font-weight: bold; 
+                            color: #D13438; 
+                            letter-spacing: 1px;
+                            background-color: rgba(209, 52, 56, 0.1);
+                            border-radius: 4px;
+                            padding: 2px 5px;
+                            font-size: 16px;
+                        """)
+                    elif '二辩' in speaker or '二号' in speaker:
+                        self.neg_2_label.setStyleSheet("""
+                            font-weight: bold; 
+                            color: #D13438; 
+                            letter-spacing: 1px;
+                            background-color: rgba(209, 52, 56, 0.1);
+                            border-radius: 4px;
+                            padding: 2px 5px;
+                            font-size: 16px;
+                        """)
+                    elif '三辩' in speaker or '三号' in speaker:
+                        self.neg_3_label.setStyleSheet("""
+                            font-weight: bold; 
+                            color: #D13438; 
+                            letter-spacing: 1px;
+                            background-color: rgba(209, 52, 56, 0.1);
+                            border-radius: 4px;
+                            padding: 2px 5px;
+                            font-size: 16px;
+                        """)
+                    elif '四辩' in speaker or '四号' in speaker:
+                        self.neg_4_label.setStyleSheet("""
+                            font-weight: bold; 
+                            color: #D13438; 
+                            letter-spacing: 1px;
+                            background-color: rgba(209, 52, 56, 0.1);
+                            border-radius: 4px;
+                            padding: 2px 5px;
+                            font-size: 16px;
+                        """)
+                    elif '自由辩手' in speaker:
+                        # 自由辩论时高亮所有辩手
+                        self.neg_1_label.setStyleSheet("""
+                            font-weight: bold; 
+                            color: #D13438; 
+                            letter-spacing: 1px;
+                            background-color: rgba(209, 52, 56, 0.1);
+                            padding: 2px 5px;
+                        """)
+                        self.neg_2_label.setStyleSheet("""
+                            font-weight: bold; 
+                            color: #D13438; 
+                            letter-spacing: 1px;
+                            background-color: rgba(209, 52, 56, 0.1);
+                            padding: 2px 5px;
+                        """)
+                        self.neg_3_label.setStyleSheet("""
+                            font-weight: bold; 
+                            color: #D13438; 
+                            letter-spacing: 1px;
+                            background-color: rgba(209, 52, 56, 0.1);
+                            padding: 2px 5px;
+                        """)
+                        self.neg_4_label.setStyleSheet("""
+                            font-weight: bold; 
+                            color: #D13438; 
+                            letter-spacing: 1px;
+                            background-color: rgba(209, 52, 56, 0.1);
+                            padding: 2px 5px;
+                        """)
+        except Exception as e:
+            logger.error(f"高亮当前辩手时出错: {e}", exc_info=True)
 
     def start_round(self, index):
         """开始指定的辩论环节
@@ -1105,6 +1500,8 @@ class DisplayBoard(QMainWindow):
             # 切换到活动视图
             self._animate_top_widget_transition(self.preview_widget_top, self.active_round_widget_top)
             self.topic_stack.setCurrentWidget(self.active_round_widget_top)
+            # 高亮当前环节的活跃辩手
+            self._highlight_active_debater()
             # 发送环节变化信号
             self.roundChanged.emit(index)
             return True

@@ -25,6 +25,7 @@ class DebateConfig:
         Raises:
             ConfigValidationError: 配置验证失败
         """
+        # 每次加载配置都会新建 DebateConfig 实例，不会残留旧数据
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
@@ -93,6 +94,23 @@ class DebateConfig:
                 raise ConfigValidationError(
                     f"第 {i+1} 个回合的 time 字段必须是正整数"
                 )
+        
+        # 验证辩手角色字段
+        if 'debater_roles' in self.data:
+            if not isinstance(self.data['debater_roles'], dict):
+                raise ConfigValidationError("debater_roles 字段必须是对象")
+                
+            # 检查是否包含必要的辩手角色
+            recommended_roles = [
+                'affirmative_first', 'affirmative_second', 'affirmative_third', 'affirmative_fourth',
+                'negative_first', 'negative_second', 'negative_third', 'negative_fourth'
+            ]
+            
+            missing_roles = [role for role in recommended_roles if role not in self.data['debater_roles']]
+            if missing_roles:
+                # 不抛出错误，但记录警告
+                import logging
+                logging.getLogger('debate_app').warning(f"配置中缺少推荐的辩手角色: {', '.join(missing_roles)}")
             
     def to_dict(self) -> Dict[str, Any]:
         """返回配置数据字典
@@ -125,4 +143,23 @@ class DebateConfig:
         Returns:
             Dict: 角色到姓名的映射
         """
-        return self.data.get('debater_roles', {})
+        roles = self.data.get('debater_roles', {})
+        # 处理旧版格式（如果存在）
+        if not roles and 'affirmative' in self.data and 'negative' in self.data:
+            # 尝试从旧结构中提取辩手信息
+            aff_debaters = self.data['affirmative'].get('debaters', {})
+            neg_debaters = self.data['negative'].get('debaters', {})
+            
+            # 生成新格式
+            roles = {
+                'affirmative_first': aff_debaters.get('first', ''),
+                'affirmative_second': aff_debaters.get('second', ''),
+                'affirmative_third': aff_debaters.get('third', ''),
+                'affirmative_fourth': aff_debaters.get('fourth', ''),
+                'negative_first': neg_debaters.get('first', ''),
+                'negative_second': neg_debaters.get('second', ''),
+                'negative_third': neg_debaters.get('third', ''),
+                'negative_fourth': neg_debaters.get('fourth', '')
+            }
+        
+        return roles

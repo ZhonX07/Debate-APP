@@ -140,7 +140,7 @@ class ControlPanel(QMainWindow):
         self.current_round_label.setStyleSheet("color: #0078D4;")
         self.current_time_label = QLabel("时长: 0分钟")
         self.current_time_label.setFont(QFont("微软雅黑", 11))
-        self.current_time_label.setStyleSheet("color: #605E5C;")
+        self.current_time_label.setStyleSheet("color: #605E5E;")
         self.current_time_label.setAlignment(Qt.AlignCenter)
         current_round_layout.addWidget(self.current_round_label)
         current_round_layout.addWidget(self.current_time_label)
@@ -295,6 +295,12 @@ class ControlPanel(QMainWindow):
         )
         if file_path:
             try:
+                # 清除所有相关区域内容
+                self.rounds_list.clear()
+                self.current_round_label.setText("未选择环节")
+                self.current_time_label.setText("时长: 0分钟")
+                self.status_value.setText("就绪")
+                
                 # 读取并验证配置文件
                 config = DebateConfig.from_file(file_path)
                 self.debate_config = config
@@ -339,6 +345,12 @@ class ControlPanel(QMainWindow):
             return False
         
         try:
+            # 清除所有相关区域内容
+            self.rounds_list.clear()
+            self.current_round_label.setText("未选择环节")
+            self.current_time_label.setText("时长: 0分钟")
+            self.status_value.setText("就绪")
+            
             # 读取并验证配置文件
             config = DebateConfig.from_file(file_path)
             self.debate_config = config
@@ -363,6 +375,11 @@ class ControlPanel(QMainWindow):
             # 选择第一个环节
             if self.rounds_list.count() > 0:
                 self.rounds_list.setCurrentRow(0)
+                
+            # 添加检查辩手信息是否正确加载的日志
+            if 'debater_roles' in config.to_dict():
+                roles = config.to_dict()['debater_roles']
+                logger.info(f"已加载辩手信息: {len(roles)} 条记录")
             
             return True
                 

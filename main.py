@@ -89,14 +89,27 @@ def main():
     if args.config and os.path.exists(args.config):
         try:
             logger.info(f"正在加载配置文件: {args.config}")
-            # 这里应使用控制面板的方法来加载配置
-            # 但我们需要一种方式来模拟用户加载文件的操作
-            QTimer.singleShot(500, lambda: control_panel.load_config_from_path(args.config))
+            # 使用控制面板的方法来加载配置并延迟执行
+            QTimer.singleShot(500, lambda: load_config_and_log(control_panel, args.config))
         except Exception as e:
             logger.error(f"自动加载配置文件失败: {e}")
     
     # 运行应用
     return app.exec_()
+
+def load_config_and_log(control_panel, config_path):
+    """加载配置文件并记录辩手信息"""
+    if control_panel.load_config_from_path(config_path):
+        # 检查辩手信息是否正确加载
+        if hasattr(control_panel, 'debate_config') and control_panel.debate_config:
+            debater_roles = control_panel.debate_config.get_debater_roles()
+            if debater_roles:
+                logger.info(f"辩手信息加载成功，共 {len(debater_roles)} 位辩手")
+                # 确保辩手信息显示在显示板上
+                if hasattr(control_panel, 'display_board'):
+                    control_panel.display_board.update_debaters_info()
+            else:
+                logger.warning("未能加载辩手信息")
 
 if __name__ == "__main__":
     sys.exit(main())
