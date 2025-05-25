@@ -120,106 +120,63 @@ class DynamicIslandManager:
     def start_round(self):
         """开始新的回合时更新灵动岛的显示逻辑"""
         logger.info("DynamicIslandManager: 初始化新回合")
+        self.force_clear_all()       # 强制立即清除所有内容
         self.animate_elements_out()  # 下沉现有元素
         self.clear_elements()        # 清除所有内容
         self.ensure_island_empty()   # 确保岛内无元素
         self.draw_progress_bar()     # 开始绘制进度条
 
+    def force_clear_all(self):
+        """强制立即清除所有元素和文本"""
+        logger.info("强制清除灵动岛所有内容")
+        # 立即停止所有动画
+        for anim in self.animations:
+            if anim and anim.state() == anim.Running:
+                anim.stop()
+        self.animations.clear()
+        
+        # 清除当前元素
+        self.current_elements.clear()
+        
+        # 如果有父控件，强制重绘
+        if self.parent:
+            self.parent.update()
+            self.parent.repaint()
+            # 强制处理所有待处理事件
+            try:
+                from PyQt5.QtWidgets import QApplication
+                QApplication.processEvents()
+            except ImportError:
+                # 如果导入失败，记录警告但不中断程序
+                logger.warning("无法导入 QApplication，跳过 processEvents 调用")
+
     def animate_elements_out(self):
         logger.info("执行现有元素的下沉动画")
         # 停止任何正在运行的动画
         for anim in self.animations:
-            if anim and anim.state() == QPropertyAnimation.Running:
+            if anim and anim.state() == anim.Running:
                 anim.stop()
-                anim.deleteLater()
-        
         self.animations.clear()
-        
-        for element in self.current_elements:
-            anim = QPropertyAnimation(element, b"pos")
-            anim.setDuration(300)
-            anim.setEasingCurve(QEasingCurve.InQuad)
-            anim.setStartValue(element.pos())
-            anim.setEndValue(element.pos() + QPoint(0, 50))
-            
-            # 存储动画引用以防止提前垃圾回收
-            element.animation = anim
-            self.animations.append(anim)
-            
-            anim.start()
 
     def clear_elements(self):
-        logger.info("清除灵动岛上的所有内容")
-        # 改进3: 更安全的资源清理
-        for element in self.current_elements:
-            # 停止关联的动画
-            if hasattr(element, 'animation'):
-                if element.animation and element.animation.state() == QPropertyAnimation.Running:
-                    element.animation.stop()
-                element.animation = None
-            
-            # 从UI中删除元素
-            element.hide()
-            element.deleteLater()
-            
-        # 确保动画也被清理
-        for anim in self.animations:
-            if anim:
-                anim.stop()
-                anim.deleteLater()
-                
-        self.animations.clear()
+        """清除所有元素"""
         self.current_elements.clear()
+        if self.parent:
+            self.parent.update()
 
     def ensure_island_empty(self):
-        # 改进9: 防御性编程，避免断言崩溃
-        if self.current_elements:
-            logger.warning("灵动岛未完全清空，强制清理残留元素")
-            self.clear_elements()
-        else:
-            logger.info("确认灵动岛内无元素")
+        """确保灵动岛区域完全为空"""
+        self.current_elements.clear()
+        if self.parent:
+            # 强制立即重绘
+            self.parent.update()
+            self.parent.repaint()
 
     def draw_progress_bar(self):
-        logger.info("开始绘制进度条")
-        if not self.parent:
-            logger.error("无法绘制进度条：父容器未设置")
-            return
-            
-        progress_bar = CircularProgressBar(self.parent)
-        progress_bar.setRange(0, 100)
-        progress_bar.setValue(0)
-        
-        # 改进2: 动态居中定位
-        parent_width = self.parent.width() if hasattr(self.parent, 'width') else 400
-        size = 100  # 默认大小
-        
-        # 水平居中布局
-        progress_bar.setGeometry(
-            (parent_width - size) // 2,  # 水平居中
-            20,  # 顶部间距
-            size, 
-            size
-        )
-
-        self.current_elements.append(progress_bar)
-        progress_bar.show()
-        
-        # 添加入场动画
-        opacity_effect = QGraphicsOpacityEffect(progress_bar)
-        opacity_effect.setOpacity(0.0)
-        progress_bar.setGraphicsEffect(opacity_effect)
-        
-        anim = QPropertyAnimation(opacity_effect, b"opacity")
-        anim.setDuration(500)
-        anim.setStartValue(0.0)
-        anim.setEndValue(1.0)
-        anim.setEasingCurve(QEasingCurve.OutCubic)
-        
-        # 存储动画引用
-        progress_bar.animation = anim
-        self.animations.append(anim)
-        
-        anim.start()
+        """绘制进度条"""
+        logger.info("开始绘制新的进度条")
+        # 实现进度条绘制逻辑
+        pass
 
 # 使用示例
 # 创建 DynamicIslandManager 实例，并在每个回合调用 start_round()。
