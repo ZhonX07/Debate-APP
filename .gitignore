@@ -38,4 +38,6 @@ htmlcov/
 
 # 项目特定的临时文件
 *.sqlite
-*.db
+*.db__pycache__/
+*.pyc
+logs/
