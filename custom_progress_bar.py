@@ -1,6 +1,6 @@
-from PyQt5.QtWidgets import QProgressBar
-from PyQt5.QtCore import Qt, QRectF, QPropertyAnimation, QEasingCurve, pyqtProperty, QPoint
-from PyQt5.QtGui import QPainter, QColor, QFontMetrics, QPen, QBrush, QPainterPath
+from PyQt5.QtWidgets import QProgressBar, QWidget, QGraphicsOpacityEffect
+from PyQt5.QtCore import Qt, QRectF, QPropertyAnimation, QEasingCurve, pyqtProperty, QPoint, QPointF
+from PyQt5.QtGui import QPainter, QColor, QFontMetrics, QPen, QBrush, QPainterPath, QConicalGradient
 import logging
 import math
 
