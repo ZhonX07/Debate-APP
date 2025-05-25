@@ -435,6 +435,16 @@ class DisplayBoard(QMainWindow):
         self.timer.timeout.connect(self.update_time)
         self.bg_label.lower()
 
+        # 设置辩手标签对齐 - 移到这里，确保标签已创建
+        self.aff_1_label.setAlignment(Qt.AlignCenter)
+        self.aff_2_label.setAlignment(Qt.AlignCenter)
+        self.aff_3_label.setAlignment(Qt.AlignCenter)
+        self.aff_4_label.setAlignment(Qt.AlignCenter)
+        self.neg_1_label.setAlignment(Qt.AlignCenter)
+        self.neg_2_label.setAlignment(Qt.AlignCenter)
+        self.neg_3_label.setAlignment(Qt.AlignCenter)
+        self.neg_4_label.setAlignment(Qt.AlignCenter)
+
         self.showNormal()
         logger.debug("DisplayBoard.initUI 结束")
 
@@ -676,7 +686,8 @@ class DisplayBoard(QMainWindow):
         
         total = max(current_round.get('time', 0), 1)
         
-        # 直接更新控件内容
+        # 直接设置文本内容而不是清除后重新设置
+        # 这样避免了可能的闪烁或文本残留问题
         self.active_round_title.setText(current_round.get('description', "当前环节"))
         self.active_speaker_info.setText(f"{side} {current_round['speaker']} - {current_round['type']}")
         self.active_speaker_info.setStyleSheet(f"color: {side_color}; font-weight: bold;")
@@ -863,6 +874,9 @@ class DisplayBoard(QMainWindow):
             # 重置计时显示
             self.reset_timer(duration=0)
             
+            # 重置所有辩手样式
+            self._reset_all_debater_styles()
+            
             # 切换到下一环节的预览
             next_idx = self.current_round_index + 1
             if next_idx < len(self.rounds):
@@ -922,6 +936,8 @@ class DisplayBoard(QMainWindow):
                 logger.info("自由辩论环节结束")
                 self.timer.stop()
                 next_round_idx = self.current_round_index + 1
+                # 重置辩手高亮
+                self._reset_all_debater_styles()
                 self._update_preview_widget_top_content(next_round_idx)
                 self._animate_top_widget_transition(self.active_round_widget_top, self.preview_widget_top)
                 
@@ -937,6 +953,8 @@ class DisplayBoard(QMainWindow):
                     logger.info("当前环节倒计时结束")
                     self.timer.stop()
                     self.timer_active = False
+                    # 重置辩手高亮
+                    self._reset_all_debater_styles()
                     next_round_idx = self.current_round_index + 1
                     self._update_preview_widget_top_content(next_round_idx)
                     self._animate_top_widget_transition(self.active_round_widget_top, self.preview_widget_top)
@@ -1018,117 +1036,11 @@ class DisplayBoard(QMainWindow):
             
         round_info = self.rounds[index]
         
-        # 直接更新控件内容
+        # 直接设置文本内容，而不是先清除再设置
+        # 这样可以避免可能出现的闪烁或残留文本
         self.preview_title_label.setText("下一环节:")
         self.preview_type_label.setText(round_info['type'])
-        # 如果是自由辩论，特别标记
-        if round_info.get('type') == "自由辩论":
-            self.preview_type_label.setStyleSheet("color: #D13438; font-weight: bold;")
-        else:
-            self.preview_type_label.setStyleSheet("color: #0078D4; font-weight: bold;")
         
-        # 设置描述
-        side = "正方" if round_info['side'] == 'affirmative' else "反方"
-        self.preview_desc_label.setText(f"{side} {round_info['speaker']}")
-        
-        # 设置时间
-        minutes = round_info['time'] // 60
-        seconds = round_info['time'] % 60
-        self.preview_time_label.setText(f"{minutes:02d}:{seconds:02d}")
-        
-        # 更新下一环节信息
-        next_round_idx = index + 1
-        if next_round_idx < len(self.rounds):
-            next_round = self.rounds[next_round_idx]
-            next_side = "正方" if next_round['side'] == 'affirmative' else "反方"
-            next_info = f"{next_side}{next_round['speaker']} - {next_round['type']}"
-            self.next_round_info.setText(next_info)
-        else:
-            self.next_round_info.setText("辩论结束")
-
-    def _animate_top_widget_transition(self, from_widget, to_widget):
-        """动画过渡两个顶部显示控件，带有强制结束机制
-    
-        Args:
-            from_widget: 当前显示的控件
-            to_widget: 要切换到的控件
-        """
-        # 强制结束任何正在运行的动画
-        if self.current_top_widget_anim:
-            self.current_top_widget_anim.stop()
-            self.current_top_widget_anim = None
-    
-        # 低性能模式下简化动画或直接切换
-        if self.low_performance_mode:
-            # 直接切换控件，不使用动画
-            self.topic_stack.setCurrentWidget(to_widget)
-            return
-        
-        # 确保两个控件的透明度效果正确初始化
-        from_effect = from_widget.graphicsEffect()
-        to_effect = to_widget.graphicsEffect()
-    
-        if not isinstance(from_effect, QGraphicsOpacityEffect):
-            from_effect = QGraphicsOpacityEffect(from_widget)
-            from_effect.setOpacity(1.0)
-            from_widget.setGraphicsEffect(from_effect)
-    
-        if not isinstance(to_effect, QGraphicsOpacityEffect):
-            to_effect = QGraphicsOpacityEffect(to_widget)
-            to_effect.setOpacity(0.0)
-            to_widget.setGraphicsEffect(to_effect)
-    
-        # 创建一个并行动画组
-        anim_group = QParallelAnimationGroup(self)
-    
-        # 当前控件淡出效果
-        fade_out = QPropertyAnimation(from_effect, b"opacity")
-        fade_out.setDuration(300)
-        fade_out.setStartValue(1.0)
-        fade_out.setEndValue(0.0)
-        fade_out.setEasingCurve(QEasingCurve.OutCubic)
-    
-        # 目标控件淡入效果
-        fade_in = QPropertyAnimation(to_effect, b"opacity")
-        fade_in.setDuration(300)
-        fade_in.setStartValue(0.0)
-        fade_in.setEndValue(1.0)
-        fade_in.setEasingCurve(QEasingCurve.InCubic)
-    
-        # 添加动画到组
-        anim_group.addAnimation(fade_out)
-        anim_group.addAnimation(fade_in)
-    
-        # 切换到要显示的控件，确保它在动画开始时是可见的
-        self.topic_stack.setCurrentWidget(to_widget)
-    
-        # 保存并启动动画组
-        self.current_top_widget_anim = anim_group
-        anim_group.start()
-
-    def _update_preview_widget_top_content(self, index=None):
-        """更新预览控件内容
-        
-        Args:
-            index: 要预览的环节索引，如果为None则使用下一个环节
-        """
-        if not self.rounds:
-            return
-        
-        # 确定要显示的环节
-        if index is None:
-            index = self.current_round_index + 1
-        
-        # 防止索引越界
-        if index < 0 or index >= len(self.rounds):
-            logger.warning(f"环节索引 {index} 超出范围")
-            return
-            
-        round_info = self.rounds[index]
-        
-        # 直接更新控件内容
-        self.preview_title_label.setText("下一环节:")
-        self.preview_type_label.setText(round_info['type'])
         # 如果是自由辩论，特别标记
         if round_info.get('type') == "自由辩论":
             self.preview_type_label.setStyleSheet("color: #D13438; font-weight: bold;")
@@ -1175,6 +1087,46 @@ class DisplayBoard(QMainWindow):
             
         except Exception as e:
             logger.error(f"设置控制面板引用时出错: {e}", exc_info=True)
+
+    def onRoundSelected(self, index):
+        """响应控制端环节选择，更新预览视图或当前环节"""
+        logger.info(f"收到环节选择信号: index={index}")
+        try:
+            # 更新预览内容
+            self._update_preview_widget_top_content(index)
+            
+            # 如果不是在计时中，则可以直接切换到预览模式
+            if not self.timer_active:
+                self.topic_stack.setCurrentWidget(self.preview_widget_top)
+        except Exception as e:
+            logger.error(f"处理环节选择时出错: {e}", exc_info=True)
+            
+    def start_round(self, index):
+        """开始指定的辩论环节
+        
+        Args:
+            index: 要开始的环节索引
+        Returns:
+            bool: 开始成功返回True，失败返回False
+        """
+        logger.info(f"开始环节: index={index}")
+        if 0 <= index < len(self.rounds):
+            self.current_round_index = index
+            self.current_round = self.rounds[index]
+            
+            # 设置计时器
+            self.current_time = self.current_round['time']
+            # 配置活动控件
+            self._update_active_round_widget_top_content()
+            # 切换到活动视图
+            self._animate_top_widget_transition(self.preview_widget_top, self.active_round_widget_top)
+            self.topic_stack.setCurrentWidget(self.active_round_widget_top)
+            # 高亮当前环节的活跃辩手
+            self._highlight_active_debater()
+            # 发送环节变化信号
+            self.roundChanged.emit(index)
+            return True
+        return False
 
     def set_debate_config(self, config):
         """设置辩论配置信息
@@ -1294,17 +1246,10 @@ class DisplayBoard(QMainWindow):
             logger.error(f"更新辩手信息时出错: {e}", exc_info=True)
     
     def _highlight_active_debater(self):
-        """高亮显示当前环节的活跃辩手 - 强化视觉效果"""
+        """高亮显示当前环节的活跃辩手 - 添加发光效果和白色文字"""
         try:
             # 先重置所有辩手标签的样式
-            self.aff_1_label.setStyleSheet("letter-spacing: 1px;")
-            self.aff_2_label.setStyleSheet("letter-spacing: 1px;")
-            self.aff_3_label.setStyleSheet("letter-spacing: 1px;")
-            self.aff_4_label.setStyleSheet("letter-spacing: 1px;")
-            self.neg_1_label.setStyleSheet("letter-spacing: 1px;")
-            self.neg_2_label.setStyleSheet("letter-spacing: 1px;")
-            self.neg_3_label.setStyleSheet("letter-spacing: 1px;")
-            self.neg_4_label.setStyleSheet("letter-spacing: 1px;")
+            self._reset_all_debater_styles()
             
             # 如果有当前环节，则高亮相应辩手
             if self.current_round:
@@ -1313,150 +1258,345 @@ class DisplayBoard(QMainWindow):
                 
                 # 根据speaker类型确定是哪位辩手
                 if side == 'affirmative':
+                    glow_color = "#0078D4"  # 正方蓝色
                     if '一辩' in speaker or '一号' in speaker:
-                        self.aff_1_label.setStyleSheet("""
-                            font-weight: bold; 
-                            color: #0078D4; 
-                            letter-spacing: 1px;
-                            background-color: rgba(0, 120, 212, 0.1);
-                            border-radius: 4px;
-                            padding: 2px 5px;
-                            font-size: 16px;
-                        """)
+                        self._set_active_debater_style(self.aff_1_label, glow_color)
                     elif '二辩' in speaker or '二号' in speaker:
-                        self.aff_2_label.setStyleSheet("""
-                            font-weight: bold; 
-                            color: #0078D4; 
-                            letter-spacing: 1px;
-                            background-color: rgba(0, 120, 212, 0.1);
-                            border-radius: 4px;
-                            padding: 2px 5px;
-                            font-size: 16px;
-                        """)
+                        self._set_active_debater_style(self.aff_2_label, glow_color)
                     elif '三辩' in speaker or '三号' in speaker:
-                        self.aff_3_label.setStyleSheet("""
-                            font-weight: bold; 
-                            color: #0078D4; 
-                            letter-spacing: 1px;
-                            background-color: rgba(0, 120, 212, 0.1);
-                            border-radius: 4px;
-                            padding: 2px 5px;
-                            font-size: 16px;
-                        """)
+                        self._set_active_debater_style(self.aff_3_label, glow_color)
                     elif '四辩' in speaker or '四号' in speaker:
-                        self.aff_4_label.setStyleSheet("""
-                            font-weight: bold; 
-                            color: #0078D4; 
-                            letter-spacing: 1px;
-                            background-color: rgba(0, 120, 212, 0.1);
-                            border-radius: 4px;
-                            padding: 2px 5px;
-                            font-size: 16px;
-                        """)
+                        self._set_active_debater_style(self.aff_4_label, glow_color)
                     elif '自由辩手' in speaker:
                         # 自由辩论时高亮所有辩手
-                        self.aff_1_label.setStyleSheet("""
-                            font-weight: bold; 
-                            color: #0078D4; 
-                            letter-spacing: 1px;
-                            background-color: rgba(0, 120, 212, 0.1);
-                            padding: 2px 5px;
-                        """)
-                        self.aff_2_label.setStyleSheet("""
-                            font-weight: bold; 
-                            color: #0078D4; 
-                            letter-spacing: 1px;
-                            background-color: rgba(0, 120, 212, 0.1);
-                            padding: 2px 5px;
-                        """)
-                        self.aff_3_label.setStyleSheet("""
-                            font-weight: bold; 
-                            color: #0078D4; 
-                            letter-spacing: 1px;
-                            background-color: rgba(0, 120, 212, 0.1);
-                            padding: 2px 5px;
-                        """)
-                        self.aff_4_label.setStyleSheet("""
-                            font-weight: bold; 
-                            color: #0078D4; 
-                            letter-spacing: 1px;
-                            background-color: rgba(0, 120, 212, 0.1);
-                            padding: 2px 5px;
-                        """)
+                        self._set_active_debater_style(self.aff_1_label, glow_color)
+                        self._set_active_debater_style(self.aff_2_label, glow_color)
+                        self._set_active_debater_style(self.aff_3_label, glow_color)
+                        self._set_active_debater_style(self.aff_4_label, glow_color)
                 elif side == 'negative':
+                    glow_color = "#D13438"  # 反方红色
                     if '一辩' in speaker or '一号' in speaker:
-                        self.neg_1_label.setStyleSheet("""
-                            font-weight: bold; 
-                            color: #D13438; 
-                            letter-spacing: 1px;
-                            background-color: rgba(209, 52, 56, 0.1);
-                            border-radius: 4px;
-                            padding: 2px 5px;
-                            font-size: 16px;
-                        """)
+                        self._set_active_debater_style(self.neg_1_label, glow_color)
                     elif '二辩' in speaker or '二号' in speaker:
-                        self.neg_2_label.setStyleSheet("""
-                            font-weight: bold; 
-                            color: #D13438; 
-                            letter-spacing: 1px;
-                            background-color: rgba(209, 52, 56, 0.1);
-                            border-radius: 4px;
-                            padding: 2px 5px;
-                            font-size: 16px;
-                        """)
+                        self._set_active_debater_style(self.neg_2_label, glow_color)
                     elif '三辩' in speaker or '三号' in speaker:
-                        self.neg_3_label.setStyleSheet("""
-                            font-weight: bold; 
-                            color: #D13438; 
-                            letter-spacing: 1px;
-                            background-color: rgba(209, 52, 56, 0.1);
-                            border-radius: 4px;
-                            padding: 2px 5px;
-                            font-size: 16px;
-                        """)
+                        self._set_active_debater_style(self.neg_3_label, glow_color)
                     elif '四辩' in speaker or '四号' in speaker:
-                        self.neg_4_label.setStyleSheet("""
-                            font-weight: bold; 
-                            color: #D13438; 
-                            letter-spacing: 1px;
-                            background-color: rgba(209, 52, 56, 0.1);
-                            border-radius: 4px;
-                            padding: 2px 5px;
-                            font-size: 16px;
-                        """)
+                        self._set_active_debater_style(self.neg_4_label, glow_color)
                     elif '自由辩手' in speaker:
                         # 自由辩论时高亮所有辩手
-                        self.neg_1_label.setStyleSheet("""
-                            font-weight: bold; 
-                            color: #D13438; 
-                            letter-spacing: 1px;
-                            background-color: rgba(209, 52, 56, 0.1);
-                            padding: 2px 5px;
-                        """)
-                        self.neg_2_label.setStyleSheet("""
-                            font-weight: bold; 
-                            color: #D13438; 
-                            letter-spacing: 1px;
-                            background-color: rgba(209, 52, 56, 0.1);
-                            padding: 2px 5px;
-                        """)
-                        self.neg_3_label.setStyleSheet("""
-                            font-weight: bold; 
-                            color: #D13438; 
-                            letter-spacing: 1px;
-                            background-color: rgba(209, 52, 56, 0.1);
-                            padding: 2px 5px;
-                        """)
-                        self.neg_4_label.setStyleSheet("""
-                            font-weight: bold; 
-                            color: #D13438; 
-                            letter-spacing: 1px;
-                            background-color: rgba(209, 52, 56, 0.1);
-                            padding: 2px 5px;
-                        """)
+                        self._set_active_debater_style(self.neg_1_label, glow_color)
+                        self._set_active_debater_style(self.neg_2_label, glow_color)
+                        self._set_active_debater_style(self.neg_3_label, glow_color)
+                        self._set_active_debater_style(self.neg_4_label, glow_color)
         except Exception as e:
             logger.error(f"高亮当前辩手时出错: {e}", exc_info=True)
+    
+    def _reset_all_debater_styles(self):
+        """重置所有辩手标签的样式"""
+        # 正方辩手样式重置
+        for label in [self.aff_1_label, self.aff_2_label, self.aff_3_label, self.aff_4_label]:
+            label.setStyleSheet("letter-spacing: 1px;")
+            # 移除任何阴影效果
+            label.setGraphicsEffect(None)
+            
+        # 反方辩手样式重置
+        for label in [self.neg_1_label, self.neg_2_label, self.neg_3_label, self.neg_4_label]:
+            label.setStyleSheet("letter-spacing: 1px;")
+            # 移除任何阴影效果
+            label.setGraphicsEffect(None)
+    
+    def _set_active_debater_style(self, label, glow_color):
+        """为活跃辩手设置高亮样式，包括白色文字和边缘发光"""
+        # 创建发光效果
+        glow_effect = QGraphicsDropShadowEffect()
+        glow_effect.setBlurRadius(15)
+        glow_effect.setColor(QColor(glow_color))
+        glow_effect.setOffset(0, 0)
+        
+        # 应用发光效果
+        label.setGraphicsEffect(glow_effect)
+        
+        # 设置白色文字、加粗和其他样式
+        label.setStyleSheet(f"""
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+            background-color: {glow_color};
+            padding: 5px 10px;
+            border-radius: 8px;
+            letter-spacing: 1px;
+        """)
+    
+    def _animate_top_widget_transition(self, from_widget, to_widget):
+        """动画过渡两个顶部显示控件，带有强制结束机制
+    
+        Args:
+            from_widget: 当前显示的控件
+            to_widget: 要切换到的控件
+        """
+        # 强制结束任何正在运行的动画
+        if self.current_top_widget_anim:
+            self.current_top_widget_anim.stop()
+            self.current_top_widget_anim = None
+    
+        # 低性能模式下简化动画或直接切换
+        if self.low_performance_mode:
+            # 直接切换控件，不使用动画
+            self.topic_stack.setCurrentWidget(to_widget)
+            return
+        
+        # 确保两个控件的透明度效果正确初始化
+        from_effect = from_widget.graphicsEffect()
+        to_effect = to_widget.graphicsEffect()
+    
+        if not isinstance(from_effect, QGraphicsOpacityEffect):
+            from_effect = QGraphicsOpacityEffect(from_widget)
+            from_effect.setOpacity(1.0)
+            from_widget.setGraphicsEffect(from_effect)
+    
+        if not isinstance(to_effect, QGraphicsOpacityEffect):
+            to_effect = QGraphicsOpacityEffect(to_widget)
+            to_effect.setOpacity(0.0)
+            to_widget.setGraphicsEffect(to_effect)
+    
+        # 创建一个并行动画组
+        anim_group = QParallelAnimationGroup(self)
+    
+        # 当前控件淡出效果
+        fade_out = QPropertyAnimation(from_effect, b"opacity")
+        fade_out.setDuration(300)
+        fade_out.setStartValue(1.0)
+        fade_out.setEndValue(0.0)
+        fade_out.setEasingCurve(QEasingCurve.OutCubic)
+    
+        # 目标控件淡入效果
+        fade_in = QPropertyAnimation(to_effect, b"opacity")
+        fade_in.setDuration(300)
+        fade_in.setStartValue(0.0)
+        fade_in.setEndValue(1.0)
+        fade_in.setEasingCurve(QEasingCurve.InCubic)
+    
+        # 添加动画到组
+        anim_group.addAnimation(fade_out)
+        anim_group.addAnimation(fade_in)
+    
+        # 切换到要显示的控件，确保它在动画开始时是可见的
+        self.topic_stack.setCurrentWidget(to_widget)
+    
+        # 保存并启动动画组
+        self.current_top_widget_anim = anim_group
+        anim_group.start()
 
+    def update_time(self):
+        if self.is_free_debate:
+            # 自由辩论模式：更新活动中的一方计时器
+            if self.affirmative_timer_active and self.affirmative_time > 0:
+                self.affirmative_time -= 1
+                # 更新控制面板上的LCD显示
+                if self.control_panel:
+                    minutes = self.affirmative_time // 60
+                    seconds = self.affirmative_time % 60
+                    self.control_panel.aff_timer_lcd.display(f"{minutes:02d}:{seconds:02d}")
+                
+                if self.affirmative_time == 0:
+                    logger.info("正方发言时间结束")
+                    self.timer.stop()
+                    self.affirmative_timer_active = False
+                    # 更新控制面板按钮状态
+                    if self.control_panel:
+                        self.control_panel.aff_timer_btn.setText("开始")
+                        self.control_panel.aff_timer_btn.setIcon(self.control_panel.style().standardIcon(getattr(QStyle, "SP_MediaPlay")))
+                        self.control_panel.neg_timer_btn.setEnabled(True)
+            
+            elif self.negative_timer_active and self.negative_time > 0:
+                self.negative_time -= 1
+                # 更新控制面板上的LCD显示
+                if self.control_panel:
+                    minutes = self.negative_time // 60
+                    seconds = self.negative_time % 60
+                    self.control_panel.neg_timer_lcd.display(f"{minutes:02d}:{seconds:02d}")
+                
+                if self.negative_time == 0:
+                    logger.info("反方发言时间结束")
+                    self.timer.stop()
+                    self.negative_timer_active = False
+                    # 更新控制面板按钮状态
+                    if self.control_panel:
+                        self.control_panel.neg_timer_btn.setText("开始")
+                        self.control_panel.neg_timer_btn.setIcon(self.control_panel.style().standardIcon(getattr(QStyle, "SP_MediaPlay")))
+                        self.control_panel.aff_timer_btn.setEnabled(True)
+            
+            # 检查总体时间是否结束
+            if self.affirmative_time == 0 and self.negative_time == 0:
+                logger.info("自由辩论环节结束")
+                self.timer.stop()
+                next_round_idx = self.current_round_index + 1
+                # 重置辩手高亮
+                self._reset_all_debater_styles()
+                self._update_preview_widget_top_content(next_round_idx)
+                self._animate_top_widget_transition(self.active_round_widget_top, self.preview_widget_top)
+                
+                # 更新控制面板状态
+                if self.control_panel:
+                    self.control_panel.aff_timer_btn.setEnabled(True)
+                    self.control_panel.status_value.setText("自由辩论环节已结束")
+        else:
+            # 标准计时模式
+            if self.current_time > 0:
+                self.current_time -= 1
+                if self.current_time == 0:
+                    logger.info("当前环节倒计时结束")
+                    self.timer.stop()
+                    self.timer_active = False
+                    # 重置辩手高亮
+                    self._reset_all_debater_styles()
+                    next_round_idx = self.current_round_index + 1
+                    self._update_preview_widget_top_content(next_round_idx)
+                    self._animate_top_widget_transition(self.active_round_widget_top, self.preview_widget_top)
+            
+        self.update_timer_display()
+    
+    def update_timer_display(self):
+        if self.is_free_debate:
+            # 更新正方计时器()
+            if hasattr(self, 'aff_progress_bar') and hasattr(self, 'aff_countdown_label'):
+                total = self.current_round['time'] // 2
+                current = total - self.affirmative_time
+                self.aff_progress_bar._value = current
+                self.aff_progress_bar.update()
+                
+                # 更新正方倒计时文本
+                minutes = self.affirmative_time // 60
+                seconds = self.affirmative_time % 60
+                self.aff_countdown_label.setText(f"{minutes:02d}:{seconds:02d}")
+                
+                # 当倒计时接近结束时改变文本颜色
+                if self.affirmative_time <= 30:
+                    self.aff_countdown_label.setStyleSheet("color: #C42B1C; font-weight: bold;")
+                else:
+                    self.aff_countdown_label.setStyleSheet("color: #323130; font-weight: bold;")
+            
+            # 更新反方计时器
+            if hasattr(self, 'neg_progress_bar') and hasattr(self, 'neg_countdown_label'):
+                total = self.current_round['time'] // 2
+                current = total - self.negative_time
+                self.neg_progress_bar._value = current
+                self.neg_progress_bar.update()
+                
+                # 更新反方倒计时文本
+                minutes = self.negative_time // 60
+                seconds = self.negative_time % 60
+                self.neg_countdown_label.setText(f"{minutes:02d}:{seconds:02d}")
+                
+                # 当倒计时接近结束时改变文本颜色
+                if self.negative_time <= 30:
+                    self.neg_countdown_label.setStyleSheet("color: #C42B1C; font-weight: bold;")
+                else:
+                    self.neg_countdown_label.setStyleSheet("color: #323130; font-weight: bold;")
+        else:
+            # 标准模式计时器更新
+            if self.current_round:
+                total = self.current_round['time']
+                current = total - self.current_time
+                progress = current / total
+            
+                # 直接设置进度值
+                self.active_progress_bar_top._value = current
+                self.active_progress_bar_top.update()
+                
+                # 更新倒计时文本
+                minutes = self.current_time // 60
+                seconds = self.current_time % 60
+                self.countdown_label.setText(f"{minutes:02d}:{seconds:02d}")
+                
+                # 当倒计时接近结束时，改变文本颜色提醒
+                if self.current_time <= 30:
+                    self.countdown_label.setStyleSheet("color: #C42B1C; font-weight: bold;")
+                else:
+                    self.countdown_label.setStyleSheet("color: #323130; font-weight: bold;")
+
+    def _update_preview_widget_top_content(self, index=None):
+        """更新预览控件内容"""
+        if not self.rounds:
+            return
+        
+        # 确定要显示的环节
+        if index is None:
+            index = self.current_round_index + 1
+        
+        # 防止索引越界
+        if index < 0 or index >= len(self.rounds):
+            logger.warning(f"环节索引 {index} 超出范围")
+            return
+            
+        round_info = self.rounds[index]
+        
+        # 直接设置文本内容，而不是先清除再设置
+        # 这样可以避免可能出现的闪烁或残留文本
+        self.preview_title_label.setText("下一环节:")
+        self.preview_type_label.setText(round_info['type'])
+        
+        # 如果是自由辩论，特别标记
+        if round_info.get('type') == "自由辩论":
+            self.preview_type_label.setStyleSheet("color: #D13438; font-weight: bold;")
+        else:
+            self.preview_type_label.setStyleSheet("color: #0078D4; font-weight: bold;")
+        
+        # 设置描述
+        side = "正方" if round_info['side'] == 'affirmative' else "反方"
+        self.preview_desc_label.setText(f"{side} {round_info['speaker']}")
+        
+        # 设置时间
+        minutes = round_info['time'] // 60
+        seconds = round_info['time'] % 60
+        self.preview_time_label.setText(f"{minutes:02d}:{seconds:02d}")
+        
+        # 更新下一环节信息
+        next_round_idx = index + 1
+        if next_round_idx < len(self.rounds):
+            next_round = self.rounds[next_round_idx]
+            next_side = "正方" if next_round['side'] == 'affirmative' else "反方"
+            next_info = f"{next_side}{next_round['speaker']} - {next_round['type']}"
+            self.next_round_info.setText(next_info)
+        else:
+            self.next_round_info.setText("辩论结束")
+        
+        # 切换到预览模式时，重置动画
+        if self.topic_stack.currentWidget() == self.preview_widget_top:
+            self.current_top_widget_anim = None
+    
+    def set_control_panel(self, control_panel):
+        """设置控制面板引用"""
+        logger.debug("设置控制面板引用")
+        try:
+            self.control_panel = control_panel
+            # 连接控制面板的环节选择信号到本地槽
+            if hasattr(control_panel, 'roundSelected'):
+                control_panel.roundSelected.connect(self.onRoundSelected)
+                
+                # 如果控制面板已经加载了环节数据，更新预览内容
+                if hasattr(control_panel, 'rounds_list') and control_panel.rounds_list.count() > 0:
+                    index = control_panel.rounds_list.currentRow()
+                    if index >= 0:
+                        self._update_preview_widget_top_content(index)
+            
+        except Exception as e:
+            logger.error(f"设置控制面板引用时出错: {e}", exc_info=True)
+
+    def onRoundSelected(self, index):
+        """响应控制端环节选择，更新预览视图或当前环节"""
+        logger.info(f"收到环节选择信号: index={index}")
+        try:
+            # 更新预览内容
+            self._update_preview_widget_top_content(index)
+            
+            # 如果不是在计时中，则可以直接切换到预览模式
+            if not self.timer_active:
+                self.topic_stack.setCurrentWidget(self.preview_widget_top)
+        except Exception as e:
+            logger.error(f"处理环节选择时出错: {e}", exc_info=True)
+            
     def start_round(self, index):
         """开始指定的辩论环节
         
@@ -1483,38 +1623,462 @@ class DisplayBoard(QMainWindow):
             self.roundChanged.emit(index)
             return True
         return False
-    
-    def next_round(self):
-        """切换到下一个环节
+
+    def set_debate_config(self, config):
+        """设置辩论配置信息
         
-        Returns:
-            bool: 切换成功返回True，失败返回False
+        Args:
+            config: 包含辩论信息的字典，包括题目、学校、辩手和环节
         """
-        logger.info("切换到下一环节")
-        next_index = self.current_round_index + 1
-        if 0 <= next_index < len(self.rounds):
-            self.current_round_index = next_index
-            self._update_preview_widget_top_content(next_index)
-            # 发送环节变化信号
-            self.roundChanged.emit(next_index)
-            return True
-        return False
-    
-    def prev_round(self):
-        """切换到上一个环节
+        logger.info("设置辩论配置")
+        # 清除所有相关显示内容
+        self.topic = ""
+        self.affirmative_school = ""
+        self.affirmative_viewpoint = ""
+        self.negative_school = ""
+        self.negative_viewpoint = ""
+        self.debater_roles = {}
+        self.rounds = []
+        self.current_round = None
+        self.current_round_index = -1
+        self.current_time = 0
+        self.affirmative_time = 0
+        self.negative_time = 0
+        self.timer_active = False
+        self.affirmative_timer_active = False
+        self.negative_timer_active = False
+        self.is_free_debate = False
+        # 清空界面标签
+        self.affirmative_school_label.setText("")
+        self.affirmative_viewpoint_label.setText("")
+        self.negative_school_label.setText("")
+        self.negative_viewpoint_label.setText("")
+        # 立即清空预览区内容
+        if hasattr(self, 'preview_title_label'):
+            self.preview_title_label.clear()
+        if hasattr(self, 'preview_type_label'):
+            self.preview_type_label.clear()
+        if hasattr(self, 'preview_desc_label'):
+            self.preview_desc_label.clear()
+        if hasattr(self, 'preview_time_label'):
+            self.preview_time_label.clear()
+        if hasattr(self, 'next_round_info'):
+            self.next_round_info.setText("")
+        # 设置辩题和学校信息
+        if 'topic' in config:
+            self.topic = config['topic']
+            self.setWindowTitle(f"辩论背景看板 - {self.topic}")
         
-        Returns:
-            bool: 切换成功返回True，失败返回False
+        # 设置正方信息
+        if 'affirmative' in config:
+            affirmative = config['affirmative']
+            if 'school' in affirmative:
+                self.affirmative_school = affirmative['school']
+                self.affirmative_school_label.setText(self.affirmative_school)
+            if 'viewpoint' in affirmative:
+                self.affirmative_viewpoint = affirmative['viewpoint']
+                # 调用高亮函数，并标记为富文本显示
+                rich_html = highlight_markers(self.affirmative_viewpoint, "#0078D4")
+                self.affirmative_viewpoint_label.setTextFormat(Qt.RichText)
+                self.affirmative_viewpoint_label.setText(rich_html)
+                
+        # 设置反方信息
+        if 'negative' in config:
+            negative = config['negative']
+            if 'school' in negative:
+                self.negative_school = negative['school']
+                self.negative_school_label.setText(self.negative_school)
+            if 'viewpoint' in negative:
+                self.negative_viewpoint = negative['viewpoint']
+                # 调用高亮函数，并标记为富文本显示
+                rich_html = highlight_markers(self.negative_viewpoint, "#D13438")
+                self.negative_viewpoint_label.setTextFormat(Qt.RichText)
+                self.negative_viewpoint_label.setText(rich_html)
+                
+        # 设置辩手角色映射
+        if 'debater_roles' in config:
+            self.debater_roles = config['debater_roles']
+            # 更新辩手信息显示
+            self.update_debaters_info()
+        
+        # 设置辩论环节
+        if 'rounds' in config:
+            self.rounds = config['rounds']
+            self._update_preview_widget_top_content(0)
+        logger.info("辩论配置已应用")
+        return True
+
+    def update_debaters_info(self):
+        """将辩手信息映射到界面标签"""
+        logger.debug("更新辩手信息")
+        try:
+            roles = self.debater_roles
+            
+            # 更新正方辩手信息
+            if 'affirmative_first' in roles:
+                self.aff_1_label.setText(roles['affirmative_first'])
+            if 'affirmative_second' in roles:
+                self.aff_2_label.setText(roles['affirmative_second'])
+            if 'affirmative_third' in roles:
+                self.aff_3_label.setText(roles['affirmative_third'])
+            if 'affirmative_fourth' in roles:
+                self.aff_4_label.setText(roles['affirmative_fourth'])
+                
+            # 更新反方辩手信息
+            if 'negative_first' in roles:
+                self.neg_1_label.setText(roles['negative_first'])
+            if 'negative_second' in roles:
+                self.neg_2_label.setText(roles['negative_second'])
+            if 'negative_third' in roles:
+                self.neg_3_label.setText(roles['negative_third'])
+            if 'negative_fourth' in roles:
+                self.neg_4_label.setText(roles['negative_fourth'])
+            
+            # 高亮当前环节的活跃辩手
+            self._highlight_active_debater()
+            
+            logger.debug("辩手信息更新完成")
+        except Exception as e:
+            logger.error(f"更新辩手信息时出错: {e}", exc_info=True)
+    
+    def _highlight_active_debater(self):
+        """高亮显示当前环节的活跃辩手 - 添加发光效果和白色文字"""
+        try:
+            # 先重置所有辩手标签的样式
+            self._reset_all_debater_styles()
+            
+            # 如果有当前环节，则高亮相应辩手
+            if self.current_round:
+                side = self.current_round.get('side')
+                speaker = self.current_round.get('speaker', '')
+                
+                # 根据speaker类型确定是哪位辩手
+                if side == 'affirmative':
+                    glow_color = "#0078D4"  # 正方蓝色
+                    if '一辩' in speaker or '一号' in speaker:
+                        self._set_active_debater_style(self.aff_1_label, glow_color)
+                    elif '二辩' in speaker or '二号' in speaker:
+                        self._set_active_debater_style(self.aff_2_label, glow_color)
+                    elif '三辩' in speaker or '三号' in speaker:
+                        self._set_active_debater_style(self.aff_3_label, glow_color)
+                    elif '四辩' in speaker or '四号' in speaker:
+                        self._set_active_debater_style(self.aff_4_label, glow_color)
+                    elif '自由辩手' in speaker:
+                        # 自由辩论时高亮所有辩手
+                        self._set_active_debater_style(self.aff_1_label, glow_color)
+                        self._set_active_debater_style(self.aff_2_label, glow_color)
+                        self._set_active_debater_style(self.aff_3_label, glow_color)
+                        self._set_active_debater_style(self.aff_4_label, glow_color)
+                elif side == 'negative':
+                    glow_color = "#D13438"  # 反方红色
+                    if '一辩' in speaker or '一号' in speaker:
+                        self._set_active_debater_style(self.neg_1_label, glow_color)
+                    elif '二辩' in speaker or '二号' in speaker:
+                        self._set_active_debater_style(self.neg_2_label, glow_color)
+                    elif '三辩' in speaker or '三号' in speaker:
+                        self._set_active_debater_style(self.neg_3_label, glow_color)
+                    elif '四辩' in speaker or '四号' in speaker:
+                        self._set_active_debater_style(self.neg_4_label, glow_color)
+                    elif '自由辩手' in speaker:
+                        # 自由辩论时高亮所有辩手
+                        self._set_active_debater_style(self.neg_1_label, glow_color)
+                        self._set_active_debater_style(self.neg_2_label, glow_color)
+                        self._set_active_debater_style(self.neg_3_label, glow_color)
+                        self._set_active_debater_style(self.neg_4_label, glow_color)
+        except Exception as e:
+            logger.error(f"高亮当前辩手时出错: {e}", exc_info=True)
+    
+    def _reset_all_debater_styles(self):
+        """重置所有辩手标签的样式"""
+        # 正方辩手样式重置
+        for label in [self.aff_1_label, self.aff_2_label, self.aff_3_label, self.aff_4_label]:
+            label.setStyleSheet("letter-spacing: 1px;")
+            # 移除任何阴影效果
+            label.setGraphicsEffect(None)
+            
+        # 反方辩手样式重置
+        for label in [self.neg_1_label, self.neg_2_label, self.neg_3_label, self.neg_4_label]:
+            label.setStyleSheet("letter-spacing: 1px;")
+            # 移除任何阴影效果
+            label.setGraphicsEffect(None)
+    
+    def _set_active_debater_style(self, label, glow_color):
+        """为活跃辩手设置高亮样式，包括白色文字和边缘发光"""
+        # 创建发光效果
+        glow_effect = QGraphicsDropShadowEffect()
+        glow_effect.setBlurRadius(15)
+        glow_effect.setColor(QColor(glow_color))
+        glow_effect.setOffset(0, 0)
+        
+        # 应用发光效果
+        label.setGraphicsEffect(glow_effect)
+        
+        # 设置白色文字、加粗和其他样式
+        label.setStyleSheet(f"""
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+            background-color: {glow_color};
+            padding: 5px 10px;
+            border-radius: 8px;
+            letter-spacing: 1px;
+        """)
+    
+    def _animate_top_widget_transition(self, from_widget, to_widget):
+        """动画过渡两个顶部显示控件，带有强制结束机制
+    
+        Args:
+            from_widget: 当前显示的控件
+            to_widget: 要切换到的控件
         """
-        logger.info("切换到上一环节")
-        prev_index = self.current_round_index - 1
-        if prev_index >= 0:
-            self.current_round_index = prev_index
-            self._update_preview_widget_top_content(prev_index)
-            # 发送环节变化信号
-            self.roundChanged.emit(prev_index)
-            return True
-        return False
+        # 强制结束任何正在运行的动画
+        if self.current_top_widget_anim:
+            self.current_top_widget_anim.stop()
+            self.current_top_widget_anim = None
+    
+        # 低性能模式下简化动画或直接切换
+        if self.low_performance_mode:
+            # 直接切换控件，不使用动画
+            self.topic_stack.setCurrentWidget(to_widget)
+            return
+        
+        # 确保两个控件的透明度效果正确初始化
+        from_effect = from_widget.graphicsEffect()
+        to_effect = to_widget.graphicsEffect()
+    
+        if not isinstance(from_effect, QGraphicsOpacityEffect):
+            from_effect = QGraphicsOpacityEffect(from_widget)
+            from_effect.setOpacity(1.0)
+            from_widget.setGraphicsEffect(from_effect)
+    
+        if not isinstance(to_effect, QGraphicsOpacityEffect):
+            to_effect = QGraphicsOpacityEffect(to_widget)
+            to_effect.setOpacity(0.0)
+            to_widget.setGraphicsEffect(to_effect)
+    
+        # 创建一个并行动画组
+        anim_group = QParallelAnimationGroup(self)
+    
+        # 当前控件淡出效果
+        fade_out = QPropertyAnimation(from_effect, b"opacity")
+        fade_out.setDuration(300)
+        fade_out.setStartValue(1.0)
+        fade_out.setEndValue(0.0)
+        fade_out.setEasingCurve(QEasingCurve.OutCubic)
+    
+        # 目标控件淡入效果
+        fade_in = QPropertyAnimation(to_effect, b"opacity")
+        fade_in.setDuration(300)
+        fade_in.setStartValue(0.0)
+        fade_in.setEndValue(1.0)
+        fade_in.setEasingCurve(QEasingCurve.InCubic)
+    
+        # 添加动画到组
+        anim_group.addAnimation(fade_out)
+        anim_group.addAnimation(fade_in)
+    
+        # 切换到要显示的控件，确保它在动画开始时是可见的
+        self.topic_stack.setCurrentWidget(to_widget)
+    
+        # 保存并启动动画组
+        self.current_top_widget_anim = anim_group
+        anim_group.start()
+
+    def update_time(self):
+        if self.is_free_debate:
+            # 自由辩论模式：更新活动中的一方计时器
+            if self.affirmative_timer_active and self.affirmative_time > 0:
+                self.affirmative_time -= 1
+                # 更新控制面板上的LCD显示
+                if self.control_panel:
+                    minutes = self.affirmative_time // 60
+                    seconds = self.affirmative_time % 60
+                    self.control_panel.aff_timer_lcd.display(f"{minutes:02d}:{seconds:02d}")
+                
+                if self.affirmative_time == 0:
+                    logger.info("正方发言时间结束")
+                    self.timer.stop()
+                    self.affirmative_timer_active = False
+                    # 更新控制面板按钮状态
+                    if self.control_panel:
+                        self.control_panel.aff_timer_btn.setText("开始")
+                        self.control_panel.aff_timer_btn.setIcon(self.control_panel.style().standardIcon(getattr(QStyle, "SP_MediaPlay")))
+                        self.control_panel.neg_timer_btn.setEnabled(True)
+            
+            elif self.negative_timer_active and self.negative_time > 0:
+                self.negative_time -= 1
+                # 更新控制面板上的LCD显示
+                if self.control_panel:
+                    minutes = self.negative_time // 60
+                    seconds = self.negative_time % 60
+                    self.control_panel.neg_timer_lcd.display(f"{minutes:02d}:{seconds:02d}")
+                
+                if self.negative_time == 0:
+                    logger.info("反方发言时间结束")
+                    self.timer.stop()
+                    self.negative_timer_active = False
+                    # 更新控制面板按钮状态
+                    if self.control_panel:
+                        self.control_panel.neg_timer_btn.setText("开始")
+                        self.control_panel.neg_timer_btn.setIcon(self.control_panel.style().standardIcon(getattr(QStyle, "SP_MediaPlay")))
+                        self.control_panel.aff_timer_btn.setEnabled(True)
+            
+            # 检查总体时间是否结束
+            if self.affirmative_time == 0 and self.negative_time == 0:
+                logger.info("自由辩论环节结束")
+                self.timer.stop()
+                next_round_idx = self.current_round_index + 1
+                # 重置辩手高亮
+                self._reset_all_debater_styles()
+                self._update_preview_widget_top_content(next_round_idx)
+                self._animate_top_widget_transition(self.active_round_widget_top, self.preview_widget_top)
+                
+                # 更新控制面板状态
+                if self.control_panel:
+                    self.control_panel.aff_timer_btn.setEnabled(True)
+                    self.control_panel.status_value.setText("自由辩论环节已结束")
+        else:
+            # 标准计时模式
+            if self.current_time > 0:
+                self.current_time -= 1
+                if self.current_time == 0:
+                    logger.info("当前环节倒计时结束")
+                    self.timer.stop()
+                    self.timer_active = False
+                    # 重置辩手高亮
+                    self._reset_all_debater_styles()
+                    next_round_idx = self.current_round_index + 1
+                    self._update_preview_widget_top_content(next_round_idx)
+                    self._animate_top_widget_transition(self.active_round_widget_top, self.preview_widget_top)
+            
+        self.update_timer_display()
+    
+    def update_timer_display(self):
+        if self.is_free_debate:
+            # 更新正方计时器()
+            if hasattr(self, 'aff_progress_bar') and hasattr(self, 'aff_countdown_label'):
+                total = self.current_round['time'] // 2
+                current = total - self.affirmative_time
+                self.aff_progress_bar._value = current
+                self.aff_progress_bar.update()
+                
+                # 更新正方倒计时文本
+                minutes = self.affirmative_time // 60
+                seconds = self.affirmative_time % 60
+                self.aff_countdown_label.setText(f"{minutes:02d}:{seconds:02d}")
+                
+                # 当倒计时接近结束时改变文本颜色
+                if self.affirmative_time <= 30:
+                    self.aff_countdown_label.setStyleSheet("color: #C42B1C; font-weight: bold;")
+                else:
+                    self.aff_countdown_label.setStyleSheet("color: #323130; font-weight: bold;")
+            
+            # 更新反方计时器
+            if hasattr(self, 'neg_progress_bar') and hasattr(self, 'neg_countdown_label'):
+                total = self.current_round['time'] // 2
+                current = total - self.negative_time
+                self.neg_progress_bar._value = current
+                self.neg_progress_bar.update()
+                
+                # 更新反方倒计时文本
+                minutes = self.negative_time // 60
+                seconds = self.negative_time % 60
+                self.neg_countdown_label.setText(f"{minutes:02d}:{seconds:02d}")
+                
+                # 当倒计时接近结束时改变文本颜色
+                if self.negative_time <= 30:
+                    self.neg_countdown_label.setStyleSheet("color: #C42B1C; font-weight: bold;")
+                else:
+                    self.neg_countdown_label.setStyleSheet("color: #323130; font-weight: bold;")
+        else:
+            # 标准模式计时器更新
+            if self.current_round:
+                total = self.current_round['time']
+                current = total - self.current_time
+                progress = current / total
+            
+                # 直接设置进度值
+                self.active_progress_bar_top._value = current
+                self.active_progress_bar_top.update()
+                
+                # 更新倒计时文本
+                minutes = self.current_time // 60
+                seconds = self.current_time % 60
+                self.countdown_label.setText(f"{minutes:02d}:{seconds:02d}")
+                
+                # 当倒计时接近结束时，改变文本颜色提醒
+                if self.current_time <= 30:
+                    self.countdown_label.setStyleSheet("color: #C42B1C; font-weight: bold;")
+                else:
+                    self.countdown_label.setStyleSheet("color: #323130; font-weight: bold;")
+
+    def _update_preview_widget_top_content(self, index=None):
+        """更新预览控件内容"""
+        if not self.rounds:
+            return
+        
+        # 确定要显示的环节
+        if index is None:
+            index = self.current_round_index + 1
+        
+        # 防止索引越界
+        if index < 0 or index >= len(self.rounds):
+            logger.warning(f"环节索引 {index} 超出范围")
+            return
+            
+        round_info = self.rounds[index]
+        
+        # 直接设置文本内容，而不是先清除再设置
+        # 这样可以避免可能出现的闪烁或残留文本
+        self.preview_title_label.setText("下一环节:")
+        self.preview_type_label.setText(round_info['type'])
+        
+        # 如果是自由辩论，特别标记
+        if round_info.get('type') == "自由辩论":
+            self.preview_type_label.setStyleSheet("color: #D13438; font-weight: bold;")
+        else:
+            self.preview_type_label.setStyleSheet("color: #0078D4; font-weight: bold;")
+        
+        # 设置描述
+        side = "正方" if round_info['side'] == 'affirmative' else "反方"
+        self.preview_desc_label.setText(f"{side} {round_info['speaker']}")
+        
+        # 设置时间
+        minutes = round_info['time'] // 60
+        seconds = round_info['time'] % 60
+        self.preview_time_label.setText(f"{minutes:02d}:{seconds:02d}")
+        
+        # 更新下一环节信息
+        next_round_idx = index + 1
+        if next_round_idx < len(self.rounds):
+            next_round = self.rounds[next_round_idx]
+            next_side = "正方" if next_round['side'] == 'affirmative' else "反方"
+            next_info = f"{next_side}{next_round['speaker']} - {next_round['type']}"
+            self.next_round_info.setText(next_info)
+        else:
+            self.next_round_info.setText("辩论结束")
+        
+        # 切换到预览模式时，重置动画
+        if self.topic_stack.currentWidget() == self.preview_widget_top:
+            self.current_top_widget_anim = None
+    
+    def set_control_panel(self, control_panel):
+        """设置控制面板引用"""
+        logger.debug("设置控制面板引用")
+        try:
+            self.control_panel = control_panel
+            # 连接控制面板的环节选择信号到本地槽
+            if hasattr(control_panel, 'roundSelected'):
+                control_panel.roundSelected.connect(self.onRoundSelected)
+                
+                # 如果控制面板已经加载了环节数据，更新预览内容
+                if hasattr(control_panel, 'rounds_list') and control_panel.rounds_list.count() > 0:
+                    index = control_panel.rounds_list.currentRow()
+                    if index >= 0:
+                        self._update_preview_widget_top_content(index)
+            
+        except Exception as e:
+            logger.error(f"设置控制面板引用时出错: {e}", exc_info=True)
 
     def onRoundSelected(self, index):
         """响应控制端环节选择，更新预览视图或当前环节"""
@@ -1528,27 +2092,786 @@ class DisplayBoard(QMainWindow):
                 self.topic_stack.setCurrentWidget(self.preview_widget_top)
         except Exception as e:
             logger.error(f"处理环节选择时出错: {e}", exc_info=True)
+            
+    def start_round(self, index):
+        """开始指定的辩论环节
+        
+        Args:
+            index: 要开始的环节索引
+        Returns:
+            bool: 开始成功返回True，失败返回False
+        """
+        logger.info(f"开始环节: index={index}")
+        if 0 <= index < len(self.rounds):
+            self.current_round_index = index
+            self.current_round = self.rounds[index]
+            
+            # 设置计时器
+            self.current_time = self.current_round['time']
+            # 配置活动控件
+            self._update_active_round_widget_top_content()
+            # 切换到活动视图
+            self._animate_top_widget_transition(self.preview_widget_top, self.active_round_widget_top)
+            self.topic_stack.setCurrentWidget(self.active_round_widget_top)
+            # 高亮当前环节的活跃辩手
+            self._highlight_active_debater()
+            # 发送环节变化信号
+            self.roundChanged.emit(index)
+            return True
+        return False
 
-    def keyPressEvent(self, event):
-        """处理键盘事件"""
-        # F11 - 切换全屏
-        if event.key() == Qt.Key_F11:
-            if self.isFullScreen():
-                self.showNormal()
-                self.is_fullscreen = False
-            else:
-                self.showFullScreen()
-                self.is_fullscreen = True
-        # Esc - 退出全屏
-        elif event.key() == Qt.Key_Escape and self.is_fullscreen:
-            self.showNormal()
-            self.is_fullscreen = False
+    def set_debate_config(self, config):
+        """设置辩论配置信息
+        
+        Args:
+            config: 包含辩论信息的字典，包括题目、学校、辩手和环节
+        """
+        logger.info("设置辩论配置")
+        # 清除所有相关显示内容
+        self.topic = ""
+        self.affirmative_school = ""
+        self.affirmative_viewpoint = ""
+        self.negative_school = ""
+        self.negative_viewpoint = ""
+        self.debater_roles = {}
+        self.rounds = []
+        self.current_round = None
+        self.current_round_index = -1
+        self.current_time = 0
+        self.affirmative_time = 0
+        self.negative_time = 0
+        self.timer_active = False
+        self.affirmative_timer_active = False
+        self.negative_timer_active = False
+        self.is_free_debate = False
+        # 清空界面标签
+        self.affirmative_school_label.setText("")
+        self.affirmative_viewpoint_label.setText("")
+        self.negative_school_label.setText("")
+        self.negative_viewpoint_label.setText("")
+        # 立即清空预览区内容
+        if hasattr(self, 'preview_title_label'):
+            self.preview_title_label.clear()
+        if hasattr(self, 'preview_type_label'):
+            self.preview_type_label.clear()
+        if hasattr(self, 'preview_desc_label'):
+            self.preview_desc_label.clear()
+        if hasattr(self, 'preview_time_label'):
+            self.preview_time_label.clear()
+        if hasattr(self, 'next_round_info'):
+            self.next_round_info.setText("")
+        # 设置辩题和学校信息
+        if 'topic' in config:
+            self.topic = config['topic']
+            self.setWindowTitle(f"辩论背景看板 - {self.topic}")
+        
+        # 设置正方信息
+        if 'affirmative' in config:
+            affirmative = config['affirmative']
+            if 'school' in affirmative:
+                self.affirmative_school = affirmative['school']
+                self.affirmative_school_label.setText(self.affirmative_school)
+            if 'viewpoint' in affirmative:
+                self.affirmative_viewpoint = affirmative['viewpoint']
+                # 调用高亮函数，并标记为富文本显示
+                rich_html = highlight_markers(self.affirmative_viewpoint, "#0078D4")
+                self.affirmative_viewpoint_label.setTextFormat(Qt.RichText)
+                self.affirmative_viewpoint_label.setText(rich_html)
+                
+        # 设置反方信息
+        if 'negative' in config:
+            negative = config['negative']
+            if 'school' in negative:
+                self.negative_school = negative['school']
+                self.negative_school_label.setText(self.negative_school)
+            if 'viewpoint' in negative:
+                self.negative_viewpoint = negative['viewpoint']
+                # 调用高亮函数，并标记为富文本显示
+                rich_html = highlight_markers(self.negative_viewpoint, "#D13438")
+                self.negative_viewpoint_label.setTextFormat(Qt.RichText)
+                self.negative_viewpoint_label.setText(rich_html)
+                
+        # 设置辩手角色映射
+        if 'debater_roles' in config:
+            self.debater_roles = config['debater_roles']
+            # 更新辩手信息显示
+            self.update_debaters_info()
+        
+        # 设置辩论环节
+        if 'rounds' in config:
+            self.rounds = config['rounds']
+            self._update_preview_widget_top_content(0)
+        logger.info("辩论配置已应用")
+        return True
+
+    def update_debaters_info(self):
+        """将辩手信息映射到界面标签"""
+        logger.debug("更新辩手信息")
+        try:
+            roles = self.debater_roles
+            
+            # 更新正方辩手信息
+            if 'affirmative_first' in roles:
+                self.aff_1_label.setText(roles['affirmative_first'])
+            if 'affirmative_second' in roles:
+                self.aff_2_label.setText(roles['affirmative_second'])
+            if 'affirmative_third' in roles:
+                self.aff_3_label.setText(roles['affirmative_third'])
+            if 'affirmative_fourth' in roles:
+                self.aff_4_label.setText(roles['affirmative_fourth'])
+                
+            # 更新反方辩手信息
+            if 'negative_first' in roles:
+                self.neg_1_label.setText(roles['negative_first'])
+            if 'negative_second' in roles:
+                self.neg_2_label.setText(roles['negative_second'])
+            if 'negative_third' in roles:
+                self.neg_3_label.setText(roles['negative_third'])
+            if 'negative_fourth' in roles:
+                self.neg_4_label.setText(roles['negative_fourth'])
+            
+            # 高亮当前环节的活跃辩手
+            self._highlight_active_debater()
+            
+            logger.debug("辩手信息更新完成")
+        except Exception as e:
+            logger.error(f"更新辩手信息时出错: {e}", exc_info=True)
+    
+    def _highlight_active_debater(self):
+        """高亮显示当前环节的活跃辩手 - 添加发光效果和白色文字"""
+        try:
+            # 先重置所有辩手标签的样式
+            self._reset_all_debater_styles()
+            
+            # 如果有当前环节，则高亮相应辩手
+            if self.current_round:
+                side = self.current_round.get('side')
+                speaker = self.current_round.get('speaker', '')
+                
+                # 根据speaker类型确定是哪位辩手
+                if side == 'affirmative':
+                    glow_color = "#0078D4"  # 正方蓝色
+                    if '一辩' in speaker or '一号' in speaker:
+                        self._set_active_debater_style(self.aff_1_label, glow_color)
+                    elif '二辩' in speaker or '二号' in speaker:
+                        self._set_active_debater_style(self.aff_2_label, glow_color)
+                    elif '三辩' in speaker or '三号' in speaker:
+                        self._set_active_debater_style(self.aff_3_label, glow_color)
+                    elif '四辩' in speaker or '四号' in speaker:
+                        self._set_active_debater_style(self.aff_4_label, glow_color)
+                    elif '自由辩手' in speaker:
+                        # 自由辩论时高亮所有辩手
+                        self._set_active_debater_style(self.aff_1_label, glow_color)
+                        self._set_active_debater_style(self.aff_2_label, glow_color)
+                        self._set_active_debater_style(self.aff_3_label, glow_color)
+                        self._set_active_debater_style(self.aff_4_label, glow_color)
+                elif side == 'negative':
+                    glow_color = "#D13438"  # 反方红色
+                    if '一辩' in speaker or '一号' in speaker:
+                        self._set_active_debater_style(self.neg_1_label, glow_color)
+                    elif '二辩' in speaker or '二号' in speaker:
+                        self._set_active_debater_style(self.neg_2_label, glow_color)
+                    elif '三辩' in speaker or '三号' in speaker:
+                        self._set_active_debater_style(self.neg_3_label, glow_color)
+                    elif '四辩' in speaker or '四号' in speaker:
+                        self._set_active_debater_style(self.neg_4_label, glow_color)
+                    elif '自由辩手' in speaker:
+                        # 自由辩论时高亮所有辩手
+                        self._set_active_debater_style(self.neg_1_label, glow_color)
+                        self._set_active_debater_style(self.neg_2_label, glow_color)
+                        self._set_active_debater_style(self.neg_3_label, glow_color)
+                        self._set_active_debater_style(self.neg_4_label, glow_color)
+        except Exception as e:
+            logger.error(f"高亮当前辩手时出错: {e}", exc_info=True)
+    
+    def _reset_all_debater_styles(self):
+        """重置所有辩手标签的样式"""
+        # 正方辩手样式重置
+        for label in [self.aff_1_label, self.aff_2_label, self.aff_3_label, self.aff_4_label]:
+            label.setStyleSheet("letter-spacing: 1px;")
+            # 移除任何阴影效果
+            label.setGraphicsEffect(None)
+            
+        # 反方辩手样式重置
+        for label in [self.neg_1_label, self.neg_2_label, self.neg_3_label, self.neg_4_label]:
+            label.setStyleSheet("letter-spacing: 1px;")
+            # 移除任何阴影效果
+            label.setGraphicsEffect(None)
+    
+    def _set_active_debater_style(self, label, glow_color):
+        """为活跃辩手设置高亮样式，包括白色文字和边缘发光"""
+        # 创建发光效果
+        glow_effect = QGraphicsDropShadowEffect()
+        glow_effect.setBlurRadius(15)
+        glow_effect.setColor(QColor(glow_color))
+        glow_effect.setOffset(0, 0)
+        
+        # 应用发光效果
+        label.setGraphicsEffect(glow_effect)
+        
+        # 设置白色文字、加粗和其他样式
+        label.setStyleSheet(f"""
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+            background-color: {glow_color};
+            padding: 5px 10px;
+            border-radius: 8px;
+            letter-spacing: 1px;
+        """)
+    
+    def _animate_top_widget_transition(self, from_widget, to_widget):
+        """动画过渡两个顶部显示控件，带有强制结束机制
+    
+        Args:
+            from_widget: 当前显示的控件
+            to_widget: 要切换到的控件
+        """
+        # 强制结束任何正在运行的动画
+        if self.current_top_widget_anim:
+            self.current_top_widget_anim.stop()
+            self.current_top_widget_anim = None
+    
+        # 低性能模式下简化动画或直接切换
+        if self.low_performance_mode:
+            # 直接切换控件，不使用动画
+            self.topic_stack.setCurrentWidget(to_widget)
+            return
+        
+        # 确保两个控件的透明度效果正确初始化
+        from_effect = from_widget.graphicsEffect()
+        to_effect = to_widget.graphicsEffect()
+    
+        if not isinstance(from_effect, QGraphicsOpacityEffect):
+            from_effect = QGraphicsOpacityEffect(from_widget)
+            from_effect.setOpacity(1.0)
+            from_widget.setGraphicsEffect(from_effect)
+    
+        if not isinstance(to_effect, QGraphicsOpacityEffect):
+            to_effect = QGraphicsOpacityEffect(to_widget)
+            to_effect.setOpacity(0.0)
+            to_widget.setGraphicsEffect(to_effect)
+    
+        # 创建一个并行动画组
+        anim_group = QParallelAnimationGroup(self)
+    
+        # 当前控件淡出效果
+        fade_out = QPropertyAnimation(from_effect, b"opacity")
+        fade_out.setDuration(300)
+        fade_out.setStartValue(1.0)
+        fade_out.setEndValue(0.0)
+        fade_out.setEasingCurve(QEasingCurve.OutCubic)
+    
+        # 目标控件淡入效果
+        fade_in = QPropertyAnimation(to_effect, b"opacity")
+        fade_in.setDuration(300)
+        fade_in.setStartValue(0.0)
+        fade_in.setEndValue(1.0)
+        fade_in.setEasingCurve(QEasingCurve.InCubic)
+    
+        # 添加动画到组
+        anim_group.addAnimation(fade_out)
+        anim_group.addAnimation(fade_in)
+    
+        # 切换到要显示的控件，确保它在动画开始时是可见的
+        self.topic_stack.setCurrentWidget(to_widget)
+    
+        # 保存并启动动画组
+        self.current_top_widget_anim = anim_group
+        anim_group.start()
+
+    def update_time(self):
+        if self.is_free_debate:
+            # 自由辩论模式：更新活动中的一方计时器
+            if self.affirmative_timer_active and self.affirmative_time > 0:
+                self.affirmative_time -= 1
+                # 更新控制面板上的LCD显示
+                if self.control_panel:
+                    minutes = self.affirmative_time // 60
+                    seconds = self.affirmative_time % 60
+                    self.control_panel.aff_timer_lcd.display(f"{minutes:02d}:{seconds:02d}")
+                
+                if self.affirmative_time == 0:
+                    logger.info("正方发言时间结束")
+                    self.timer.stop()
+                    self.affirmative_timer_active = False
+                    # 更新控制面板按钮状态
+                    if self.control_panel:
+                        self.control_panel.aff_timer_btn.setText("开始")
+                        self.control_panel.aff_timer_btn.setIcon(self.control_panel.style().standardIcon(getattr(QStyle, "SP_MediaPlay")))
+                        self.control_panel.neg_timer_btn.setEnabled(True)
+            
+            elif self.negative_timer_active and self.negative_time > 0:
+                self.negative_time -= 1
+                # 更新控制面板上的LCD显示
+                if self.control_panel:
+                    minutes = self.negative_time // 60
+                    seconds = self.negative_time % 60
+                    self.control_panel.neg_timer_lcd.display(f"{minutes:02d}:{seconds:02d}")
+                
+                if self.negative_time == 0:
+                    logger.info("反方发言时间结束")
+                    self.timer.stop()
+                    self.negative_timer_active = False
+                    # 更新控制面板按钮状态
+                    if self.control_panel:
+                        self.control_panel.neg_timer_btn.setText("开始")
+                        self.control_panel.neg_timer_btn.setIcon(self.control_panel.style().standardIcon(getattr(QStyle, "SP_MediaPlay")))
+                        self.control_panel.aff_timer_btn.setEnabled(True)
+            
+            # 检查总体时间是否结束
+            if self.affirmative_time == 0 and self.negative_time == 0:
+                logger.info("自由辩论环节结束")
+                self.timer.stop()
+                next_round_idx = self.current_round_index + 1
+                # 重置辩手高亮
+                self._reset_all_debater_styles()
+                self._update_preview_widget_top_content(next_round_idx)
+                self._animate_top_widget_transition(self.active_round_widget_top, self.preview_widget_top)
+                
+                # 更新控制面板状态
+                if self.control_panel:
+                    self.control_panel.aff_timer_btn.setEnabled(True)
+                    self.control_panel.status_value.setText("自由辩论环节已结束")
         else:
-            super().keyPressEvent(event)
+            # 标准计时模式
+            if self.current_time > 0:
+                self.current_time -= 1
+                if self.current_time == 0:
+                    logger.info("当前环节倒计时结束")
+                    self.timer.stop()
+                    self.timer_active = False
+                    # 重置辩手高亮
+                    self._reset_all_debater_styles()
+                    next_round_idx = self.current_round_index + 1
+                    self._update_preview_widget_top_content(next_round_idx)
+                    self._animate_top_widget_transition(self.active_round_widget_top, self.preview_widget_top)
+            
+        self.update_timer_display()
+    
+    def update_timer_display(self):
+        if self.is_free_debate:
+            # 更新正方计时器()
+            if hasattr(self, 'aff_progress_bar') and hasattr(self, 'aff_countdown_label'):
+                total = self.current_round['time'] // 2
+                current = total - self.affirmative_time
+                self.aff_progress_bar._value = current
+                self.aff_progress_bar.update()
+                
+                # 更新正方倒计时文本
+                minutes = self.affirmative_time // 60
+                seconds = self.affirmative_time % 60
+                self.aff_countdown_label.setText(f"{minutes:02d}:{seconds:02d}")
+                
+                # 当倒计时接近结束时改变文本颜色
+                if self.affirmative_time <= 30:
+                    self.aff_countdown_label.setStyleSheet("color: #C42B1C; font-weight: bold;")
+                else:
+                    self.aff_countdown_label.setStyleSheet("color: #323130; font-weight: bold;")
+            
+            # 更新反方计时器
+            if hasattr(self, 'neg_progress_bar') and hasattr(self, 'neg_countdown_label'):
+                total = self.current_round['time'] // 2
+                current = total - self.negative_time
+                self.neg_progress_bar._value = current
+                self.neg_progress_bar.update()
+                
+                # 更新反方倒计时文本
+                minutes = self.negative_time // 60
+                seconds = self.negative_time % 60
+                self.neg_countdown_label.setText(f"{minutes:02d}:{seconds:02d}")
+                
+                # 当倒计时接近结束时改变文本颜色
+                if self.negative_time <= 30:
+                    self.neg_countdown_label.setStyleSheet("color: #C42B1C; font-weight: bold;")
+                else:
+                    self.neg_countdown_label.setStyleSheet("color: #323130; font-weight: bold;")
+        else:
+            # 标准模式计时器更新
+            if self.current_round:
+                total = self.current_round['time']
+                current = total - self.current_time
+                progress = current / total
+            
+                # 直接设置进度值
+                self.active_progress_bar_top._value = current
+                self.active_progress_bar_top.update()
+                
+                # 更新倒计时文本
+                minutes = self.current_time // 60
+                seconds = self.current_time % 60
+                self.countdown_label.setText(f"{minutes:02d}:{seconds:02d}")
+                
+                # 当倒计时接近结束时，改变文本颜色提醒
+                if self.current_time <= 30:
+                    self.countdown_label.setStyleSheet("color: #C42B1C; font-weight: bold;")
+                else:
+                    self.countdown_label.setStyleSheet("color: #323130; font-weight: bold;")
 
-    def resizeEvent(self, event):
-        """处理窗口大小变化事件"""
-        # 调整背景和毛玻璃效果的大小
-        self.bg_label.setGeometry(0, 0, self.width(), self.height())
-        self.blur_effect.setGeometry(0, 0, self.width(), self.height())
-        super().resizeEvent(event)
+    def _update_preview_widget_top_content(self, index=None):
+        """更新预览控件内容"""
+        if not self.rounds:
+            return
+        
+        # 确定要显示的环节
+        if index is None:
+            index = self.current_round_index + 1
+        
+        # 防止索引越界
+        if index < 0 or index >= len(self.rounds):
+            logger.warning(f"环节索引 {index} 超出范围")
+            return
+            
+        round_info = self.rounds[index]
+        
+        # 直接设置文本内容，而不是先清除再设置
+        # 这样可以避免可能出现的闪烁或残留文本
+        self.preview_title_label.setText("下一环节:")
+        self.preview_type_label.setText(round_info['type'])
+        
+        # 如果是自由辩论，特别标记
+        if round_info.get('type') == "自由辩论":
+            self.preview_type_label.setStyleSheet("color: #D13438; font-weight: bold;")
+        else:
+            self.preview_type_label.setStyleSheet("color: #0078D4; font-weight: bold;")
+        
+        # 设置描述
+        side = "正方" if round_info['side'] == 'affirmative' else "反方"
+        self.preview_desc_label.setText(f"{side} {round_info['speaker']}")
+        
+        # 设置时间
+        minutes = round_info['time'] // 60
+        seconds = round_info['time'] % 60
+        self.preview_time_label.setText(f"{minutes:02d}:{seconds:02d}")
+        
+        # 更新下一环节信息
+        next_round_idx = index + 1
+        if next_round_idx < len(self.rounds):
+            next_round = self.rounds[next_round_idx]
+            next_side = "正方" if next_round['side'] == 'affirmative' else "反方"
+            next_info = f"{next_side}{next_round['speaker']} - {next_round['type']}"
+            self.next_round_info.setText(next_info)
+        else:
+            self.next_round_info.setText("辩论结束")
+        
+        # 切换到预览模式时，重置动画
+        if self.topic_stack.currentWidget() == self.preview_widget_top:
+            self.current_top_widget_anim = None
+    
+    def set_control_panel(self, control_panel):
+        """设置控制面板引用"""
+        logger.debug("设置控制面板引用")
+        try:
+            self.control_panel = control_panel
+            # 连接控制面板的环节选择信号到本地槽
+            if hasattr(control_panel, 'roundSelected'):
+                control_panel.roundSelected.connect(self.onRoundSelected)
+                
+                # 如果控制面板已经加载了环节数据，更新预览内容
+                if hasattr(control_panel, 'rounds_list') and control_panel.rounds_list.count() > 0:
+                    index = control_panel.rounds_list.currentRow()
+                    if index >= 0:
+                        self._update_preview_widget_top_content(index)
+            
+        except Exception as e:
+            logger.error(f"设置控制面板引用时出错: {e}", exc_info=True)
+
+    def onRoundSelected(self, index):
+        """响应控制端环节选择，更新预览视图或当前环节"""
+        logger.info(f"收到环节选择信号: index={index}")
+        try:
+            # 更新预览内容
+            self._update_preview_widget_top_content(index)
+            
+            # 如果不是在计时中，则可以直接切换到预览模式
+            if not self.timer_active:
+                self.topic_stack.setCurrentWidget(self.preview_widget_top)
+        except Exception as e:
+            logger.error(f"处理环节选择时出错: {e}", exc_info=True)
+            
+    def start_round(self, index):
+        """开始指定的辩论环节
+        
+        Args:
+            index: 要开始的环节索引
+        Returns:
+            bool: 开始成功返回True，失败返回False
+        """
+        logger.info(f"开始环节: index={index}")
+        if 0 <= index < len(self.rounds):
+            self.current_round_index = index
+            self.current_round = self.rounds[index]
+            
+            # 设置计时器
+            self.current_time = self.current_round['time']
+            # 配置活动控件
+            self._update_active_round_widget_top_content()
+            # 切换到活动视图
+            self._animate_top_widget_transition(self.preview_widget_top, self.active_round_widget_top)
+            self.topic_stack.setCurrentWidget(self.active_round_widget_top)
+            # 高亮当前环节的活跃辩手
+            self._highlight_active_debater()
+            # 发送环节变化信号
+            self.roundChanged.emit(index)
+            return True
+        return False
+
+    def set_debate_config(self, config):
+        """设置辩论配置信息
+        
+        Args:
+            config: 包含辩论信息的字典，包括题目、学校、辩手和环节
+        """
+        logger.info("设置辩论配置")
+        # 清除所有相关显示内容
+        self.topic = ""
+        self.affirmative_school = ""
+        self.affirmative_viewpoint = ""
+        self.negative_school = ""
+        self.negative_viewpoint = ""
+        self.debater_roles = {}
+        self.rounds = []
+        self.current_round = None
+        self.current_round_index = -1
+        self.current_time = 0
+        self.affirmative_time = 0
+        self.negative_time = 0
+        self.timer_active = False
+        self.affirmative_timer_active = False
+        self.negative_timer_active = False
+        self.is_free_debate = False
+        # 清空界面标签
+        self.affirmative_school_label.setText("")
+        self.affirmative_viewpoint_label.setText("")
+        self.negative_school_label.setText("")
+        self.negative_viewpoint_label.setText("")
+        # 立即清空预览区内容
+        if hasattr(self, 'preview_title_label'):
+            self.preview_title_label.clear()
+        if hasattr(self, 'preview_type_label'):
+            self.preview_type_label.clear()
+        if hasattr(self, 'preview_desc_label'):
+            self.preview_desc_label.clear()
+        if hasattr(self, 'preview_time_label'):
+            self.preview_time_label.clear()
+        if hasattr(self, 'next_round_info'):
+            self.next_round_info.setText("")
+        # 设置辩题和学校信息
+        if 'topic' in config:
+            self.topic = config['topic']
+            self.setWindowTitle(f"辩论背景看板 - {self.topic}")
+        
+        # 设置正方信息
+        if 'affirmative' in config:
+            affirmative = config['affirmative']
+            if 'school' in affirmative:
+                self.affirmative_school = affirmative['school']
+                self.affirmative_school_label.setText(self.affirmative_school)
+            if 'viewpoint' in affirmative:
+                self.affirmative_viewpoint = affirmative['viewpoint']
+                # 调用高亮函数，并标记为富文本显示
+                rich_html = highlight_markers(self.affirmative_viewpoint, "#0078D4")
+                self.affirmative_viewpoint_label.setTextFormat(Qt.RichText)
+                self.affirmative_viewpoint_label.setText(rich_html)
+                
+        # 设置反方信息
+        if 'negative' in config:
+            negative = config['negative']
+            if 'school' in negative:
+                self.negative_school = negative['school']
+                self.negative_school_label.setText(self.negative_school)
+            if 'viewpoint' in negative:
+                self.negative_viewpoint = negative['viewpoint']
+                # 调用高亮函数，并标记为富文本显示
+                rich_html = highlight_markers(self.negative_viewpoint, "#D13438")
+                self.negative_viewpoint_label.setTextFormat(Qt.RichText)
+                self.negative_viewpoint_label.setText(rich_html)
+                
+        # 设置辩手角色映射
+        if 'debater_roles' in config:
+            self.debater_roles = config['debater_roles']
+            # 更新辩手信息显示
+            self.update_debaters_info()
+        
+        # 设置辩论环节
+        if 'rounds' in config:
+            self.rounds = config['rounds']
+            self._update_preview_widget_top_content(0)
+        logger.info("辩论配置已应用")
+        return True
+
+    def update_debaters_info(self):
+        """将辩手信息映射到界面标签"""
+        logger.debug("更新辩手信息")
+        try:
+            roles = self.debater_roles
+            
+            # 更新正方辩手信息
+            if 'affirmative_first' in roles:
+                self.aff_1_label.setText(roles['affirmative_first'])
+            if 'affirmative_second' in roles:
+                self.aff_2_label.setText(roles['affirmative_second'])
+            if 'affirmative_third' in roles:
+                self.aff_3_label.setText(roles['affirmative_third'])
+            if 'affirmative_fourth' in roles:
+                self.aff_4_label.setText(roles['affirmative_fourth'])
+                
+            # 更新反方辩手信息
+            if 'negative_first' in roles:
+                self.neg_1_label.setText(roles['negative_first'])
+            if 'negative_second' in roles:
+                self.neg_2_label.setText(roles['negative_second'])
+            if 'negative_third' in roles:
+                self.neg_3_label.setText(roles['negative_third'])
+            if 'negative_fourth' in roles:
+                self.neg_4_label.setText(roles['negative_fourth'])
+            
+            # 高亮当前环节的活跃辩手
+            self._highlight_active_debater()
+            
+            logger.debug("辩手信息更新完成")
+        except Exception as e:
+            logger.error(f"更新辩手信息时出错: {e}", exc_info=True)
+    
+    def _highlight_active_debater(self):
+        """高亮显示当前环节的活跃辩手 - 添加发光效果和白色文字"""
+        try:
+            # 先重置所有辩手标签的样式
+            self._reset_all_debater_styles()
+            
+            # 如果有当前环节，则高亮相应辩手
+            if self.current_round:
+                side = self.current_round.get('side')
+                speaker = self.current_round.get('speaker', '')
+                
+                # 根据speaker类型确定是哪位辩手
+                if side == 'affirmative':
+                    glow_color = "#0078D4"  # 正方蓝色
+                    if '一辩' in speaker or '一号' in speaker:
+                        self._set_active_debater_style(self.aff_1_label, glow_color)
+                    elif '二辩' in speaker or '二号' in speaker:
+                        self._set_active_debater_style(self.aff_2_label, glow_color)
+                    elif '三辩' in speaker or '三号' in speaker:
+                        self._set_active_debater_style(self.aff_3_label, glow_color)
+                    elif '四辩' in speaker or '四号' in speaker:
+                        self._set_active_debater_style(self.aff_4_label, glow_color)
+                    elif '自由辩手' in speaker:
+                        # 自由辩论时高亮所有辩手
+                        self._set_active_debater_style(self.aff_1_label, glow_color)
+                        self._set_active_debater_style(self.aff_2_label, glow_color)
+                        self._set_active_debater_style(self.aff_3_label, glow_color)
+                        self._set_active_debater_style(self.aff_4_label, glow_color)
+                elif side == 'negative':
+                    glow_color = "#D13438"  # 反方红色
+                    if '一辩' in speaker or '一号' in speaker:
+                        self._set_active_debater_style(self.neg_1_label, glow_color)
+                    elif '二辩' in speaker or '二号' in speaker:
+                        self._set_active_debater_style(self.neg_2_label, glow_color)
+                    elif '三辩' in speaker or '三号' in speaker:
+                        self._set_active_debater_style(self.neg_3_label, glow_color)
+                    elif '四辩' in speaker or '四号' in speaker:
+                        self._set_active_debater_style(self.neg_4_label, glow_color)
+                    elif '自由辩手' in speaker:
+                        # 自由辩论时高亮所有辩手
+                        self._set_active_debater_style(self.neg_1_label, glow_color)
+                        self._set_active_debater_style(self.neg_2_label, glow_color)
+                        self._set_active_debater_style(self.neg_3_label, glow_color)
+                        self._set_active_debater_style(self.neg_4_label, glow_color)
+        except Exception as e:
+            logger.error(f"高亮当前辩手时出错: {e}", exc_info=True)
+    
+    def _reset_all_debater_styles(self):
+        """重置所有辩手标签的样式"""
+        # 正方辩手样式重置
+        for label in [self.aff_1_label, self.aff_2_label, self.aff_3_label, self.aff_4_label]:
+            label.setStyleSheet("letter-spacing: 1px;")
+            # 移除任何阴影效果
+            label.setGraphicsEffect(None)
+            
+        # 反方辩手样式重置
+        for label in [self.neg_1_label, self.neg_2_label, self.neg_3_label, self.neg_4_label]:
+            label.setStyleSheet("letter-spacing: 1px;")
+            # 移除任何阴影效果
+            label.setGraphicsEffect(None)
+    
+    def _set_active_debater_style(self, label, glow_color):
+        """为活跃辩手设置高亮样式，包括白色文字和边缘发光"""
+        # 创建发光效果
+        glow_effect = QGraphicsDropShadowEffect()
+        glow_effect.setBlurRadius(15)
+        glow_effect.setColor(QColor(glow_color))
+        glow_effect.setOffset(0, 0)
+        
+        # 应用发光效果
+        label.setGraphicsEffect(glow_effect)
+        
+        # 设置白色文字、加粗和其他样式
+        label.setStyleSheet(f"""
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+            background-color: {glow_color};
+            padding: 5px 10px;
+            border-radius: 8px;
+            letter-spacing: 1px;
+        """)
+    
+    def _animate_top_widget_transition(self, from_widget, to_widget):
+        """动画过渡两个顶部显示控件，带有强制结束机制
+    
+        Args:
+            from_widget: 当前显示的控件
+            to_widget: 要切换到的控件
+        """
+        # 强制结束任何正在运行的动画
+        if self.current_top_widget_anim:
+            self.current_top_widget_anim.stop()
+            self.current_top_widget_anim = None
+    
+        # 低性能模式下简化动画或直接切换
+        if self.low_performance_mode:
+            # 直接切换控件，不使用动画
+            self.topic_stack.setCurrentWidget(to_widget)
+            return
+        
+        # 确保两个控件的透明度效果正确初始化
+        from_effect = from_widget.graphicsEffect()
+        to_effect = to_widget.graphicsEffect()
+    
+        if not isinstance(from_effect, QGraphicsOpacityEffect):
+            from_effect = QGraphicsOpacityEffect(from_widget)
+            from_effect.setOpacity(1.0)
+            from_widget.setGraphicsEffect(from_effect)
+    
+        if not isinstance(to_effect, QGraphicsOpacityEffect):
+            to_effect = QGraphicsOpacityEffect(to_widget)
+            to_effect.setOpacity(0.0)
+            to_widget.setGraphicsEffect(to_effect)
+    
+        # 创建一个并行动画组
+        anim_group = QParallelAnimationGroup(self)
+    
+        # 当前控件淡出效果
+        fade_out = QPropertyAnimation(from_effect, b"opacity")
+        fade_out.setDuration(300)
+        fade_out.setStartValue(1.0)
+        fade_out.setEndValue(0.0)
+        fade_out.setEasingCurve(QEasingCurve.OutCubic)
+    
+        # 目标控件淡入效果
+        fade_in = QPropertyAnimation(to_effect, b"opacity")
+        fade_in.setDuration(300)
+        fade_in.setStartValue(0.0)
+        fade_in.setEndValue(1.0)
+        fade_in.setEasingCurve(QEasingCurve.InCubic)
+    
+        # 添加动画到组
+        anim_group.addAnimation(fade_out)
+        anim_group.addAnimation(fade_in)
+    
+        # 切换到要显示的控件，确保它在动画开始时是可见的
+        self.topic_stack.setCurrentWidget(to_widget)
+    
+        # 保存并启动动画组
+        self.current_top_widget_anim = anim_group
+        anim_group.start()
