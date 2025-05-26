@@ -10,7 +10,7 @@ import sys
 import os
 import argparse
 import logging
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QGraphicsOpacityEffect
 from PyQt5.QtCore import QTranslator, QLocale, QTimer
 
 # 导入程序模块
@@ -93,15 +93,40 @@ def main():
             QTimer.singleShot(500, lambda: load_config_and_log(control_panel, args.config))
         except Exception as e:
             logger.error(f"自动加载配置文件失败: {e}")
+    
     # 运行应用
     return app.exec_()
 
 def load_config_and_log(control_panel, config_path):
     """加载配置文件并记录辩手信息"""
+    logger.info(f"开始加载配置文件: {config_path}")
+    
     if control_panel.load_config_from_path(config_path):
+        logger.info("配置文件加载成功")
+        
         # 检查辩手信息是否正确加载
         if hasattr(control_panel, 'debate_config') and control_panel.debate_config:
             debater_roles = control_panel.debate_config.get_debater_roles()
+            rounds_data = control_panel.debate_config.get_rounds()
+            
+            logger.info(f"回合数据: {len(rounds_data)} 个回合")
+            for i, round_info in enumerate(rounds_data):
+                logger.debug(f"回合 {i+1}: {round_info}")
+            
+            # 检查回合列表是否正确填充
+            if hasattr(control_panel, 'rounds_list'):
+                list_count = control_panel.rounds_list.count()
+                logger.info(f"界面回合列表项目数: {list_count}")
+                
+                if list_count == 0:
+                    logger.error("回合列表为空，可能存在UI更新问题")
+                else:
+                    # 输出列表中的项目
+                    for i in range(list_count):
+                        item = control_panel.rounds_list.item(i)
+                        if item:
+                            logger.debug(f"列表项 {i}: {item.text()}")
+            
             if debater_roles:
                 logger.info(f"辩手信息加载成功，共 {len(debater_roles)} 位辩手")
                 # 确保辩手信息显示在显示板上
@@ -109,6 +134,10 @@ def load_config_and_log(control_panel, config_path):
                     control_panel.display_board.update_debaters_info()
             else:
                 logger.warning("未能加载辩手信息")
+        else:
+            logger.error("配置对象未正确创建")
+    else:
+        logger.error(f"配置文件加载失败: {config_path}")
 
 if __name__ == "__main__":
     sys.exit(main())

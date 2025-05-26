@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QProgressBar, QWidget, QGraphicsOpacityEffect
+from PyQt5.QtWidgets import QProgressBar, QWidget, QGraphicsOpacityEffect, QLabel
 from PyQt5.QtCore import Qt, QRectF, QPropertyAnimation, QEasingCurve, pyqtProperty, QPoint, QPointF
 from PyQt5.QtGui import QPainter, QColor, QFontMetrics, QPen, QBrush, QPainterPath, QConicalGradient
 import logging
@@ -6,7 +6,7 @@ import math
 
 logger = logging.getLogger('debate_app.custom_progress_bar')
 class CircularProgressBar(QProgressBar):
-    """空心环形进度条"""
+    """空心环形进度条 - 完全透明背景，无阴影效果"""
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -17,11 +17,12 @@ class CircularProgressBar(QProgressBar):
         self.text_color = Qt.black        # 文字颜色
         self.radius = 40                  # 环形半径
         self._value = 0
+        self._maximum = 100               # 添加最大值属性
         
         # 固定尺寸
         self.setFixedSize(100, 100)
         
-        # 关闭默认样式
+        # 关闭默认样式，确保完全透明
         self.setTextVisible(True)
         self.setStyleSheet("""
             QProgressBar {
@@ -30,8 +31,16 @@ class CircularProgressBar(QProgressBar):
                 font-family: 微软雅黑;
                 font-size: 14px;
                 font-weight: bold;
+                /* 移除所有可能的阴影和边框效果 */
+                outline: none;
+                margin: 0px;
+                padding: 0px;
             }
         """)
+        
+        # 确保控件本身也是完全透明的
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setWindowFlags(Qt.FramelessWindowHint)
 
     def setLineWidth(self, width):
         self.line_width = width
@@ -59,17 +68,32 @@ class CircularProgressBar(QProgressBar):
         self.text_color = QColor(color)
         self.update()
 
+    def setMaximum(self, value):
+        """设置最大值"""
+        self._maximum = max(1, value)  # 确保最大值至少为1
+        self.update()
+        
+    def maximum(self):
+        """获取最大值"""
+        return self._maximum
+        
+    def setValue(self, value):
+        """设置当前值"""
+        self._value = min(max(0, value), self._maximum)
+        self.update()
+        
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHints(QPainter.Antialiasing)
         
+        # 确保背景完全透明
+        painter.fillRect(self.rect(), Qt.transparent)
+        
         # 计算中心点和半径
         center = self.rect().center()
-        # radius = min(self.width(), self.height()) // 2 - self.line_width # This radius was for the background ring
-
+        
         # 绘制进度环
-        # The progress ring will be drawn based on the widget's rect directly
-        progress = max(0.0, min(1.0, self._value / (self.maximum() - self.minimum())))
+        progress = max(0.0, min(1.0, self._value / self._maximum))
         angle = 360 * progress
         
         progress_path = QPainterPath()
@@ -83,21 +107,20 @@ class CircularProgressBar(QProgressBar):
         progress_path.arcMoveTo(arc_rect, 90)  # 从12点方向开始
         progress_path.arcTo(arc_rect, 90, -angle)  # 逆时针绘制
         
-        painter.setPen(QPen(self.progress_color, self.line_width, Qt.SolidLine, Qt.RoundCap))
+        # 设置进度环画笔，无阴影效果
+        pen = QPen(self.progress_color, self.line_width, Qt.SolidLine, Qt.RoundCap)
+        pen.setCosmetic(True)  # 确保线条不受缩放影响
+        painter.setPen(pen)
         painter.drawPath(progress_path)
 
-        # 绘制中间文字
-        painter.setPen(self.text_color)
+        # 绘制中间文字，无阴影效果
+        painter.setPen(QPen(self.text_color, 1, Qt.SolidLine))
         text = f"{int(progress*100)}%"
-        fm = painter.fontMetrics() # Use painter.fontMetrics()
+        fm = painter.fontMetrics()
         text_rect = fm.boundingRect(text)
         painter.drawText(center.x() - text_rect.width()//2,
                         center.y() + text_rect.height()//2 - fm.descent(),
                         text)
-
-    def setValue(self, value):
-        self._value = value
-        self.update()
 
 class RoundedProgressBar(CircularProgressBar):
     """适配原有接口的环形进度条"""
@@ -119,16 +142,23 @@ class DynamicIslandManager:
 
     def start_round(self):
         """开始新的回合时更新灵动岛的显示逻辑"""
-        logger.info("DynamicIslandManager: 初始化新回合")
-        self.force_clear_all()       # 强制立即清除所有内容
-        self.animate_elements_out()  # 下沉现有元素
-        self.clear_elements()        # 清除所有内容
-        self.ensure_island_empty()   # 确保岛内无元素
-        self.draw_progress_bar()     # 开始绘制进度条
+        logger.info("DynamicIslandManager: 更新回合显示")
+        self.force_clear_all()       # 安全清除残留内容
+        self.update_existing_elements()  # 更新现有控件内容
+
+    def update_existing_elements(self):
+        """复用现有控件更新内容"""
+        if self.parent:
+            # 确保只更新文本内容而不创建新控件
+            existing_labels = [child for child in self.parent.children() if isinstance(child, QLabel)]
+            for label in existing_labels:
+                label.setText("")  # 清空旧内容
+                label.setStyleSheet("")  # 重置样式
+                # 这里可以添加具体的内容更新逻辑
 
     def force_clear_all(self):
-        """强制立即清除所有元素和文本"""
-        logger.info("强制清除灵动岛所有内容")
+        """安全清除内容而不销毁控件"""
+        logger.info("安全清除灵动岛内容")
         try:
             # 立即停止所有动画
             for anim in self.animations:
@@ -138,6 +168,9 @@ class DynamicIslandManager:
             
             # 清除当前元素
             self.current_elements.clear()
+            
+            # 移除所有阴影效果
+            self.remove_all_shadow_effects()
             
             # 如果有父控件，强制重绘
             if self.parent:
@@ -163,8 +196,41 @@ class DynamicIslandManager:
         except Exception as e:
             logger.error(f"强制清除灵动岛内容时出错: {e}", exc_info=True)
 
+    def remove_all_shadow_effects(self):
+        """移除所有控件的阴影效果"""
+        try:
+            if not self.parent:
+                return
+                
+            # 递归移除所有子控件的阴影效果
+            self._remove_widget_shadows(self.parent)
+            
+            logger.info("已移除所有控件的阴影效果")
+            
+        except Exception as e:
+            logger.error(f"移除阴影效果时出错: {e}", exc_info=True)
+    
+    def _remove_widget_shadows(self, widget):
+        """递归移除控件及其子控件的阴影效果"""
+        try:
+            from PyQt5.QtWidgets import QGraphicsDropShadowEffect
+            
+            # 移除当前控件的阴影效果
+            effect = widget.graphicsEffect()
+            if isinstance(effect, QGraphicsDropShadowEffect):
+                widget.setGraphicsEffect(None)
+                logger.debug(f"已移除控件 {widget.objectName()} 的阴影效果")
+            
+            # 递归处理子控件
+            for child in widget.children():
+                if hasattr(child, 'graphicsEffect'):
+                    self._remove_widget_shadows(child)
+                    
+        except Exception as e:
+            logger.warning(f"处理控件阴影时出错: {e}")
+
     def force_text_update(self, target_widget, new_text, style=""):
-        """强制更新文本，确保没有残留"""
+        """强制更新文本，确保没有残留和阴影效果"""
         try:
             if not target_widget:
                 return
@@ -172,6 +238,12 @@ class DynamicIslandManager:
             # 隐藏控件
             was_visible = target_widget.isVisible()
             target_widget.setVisible(False)
+            
+            # 移除阴影效果
+            from PyQt5.QtWidgets import QGraphicsDropShadowEffect
+            effect = target_widget.graphicsEffect()
+            if isinstance(effect, QGraphicsDropShadowEffect):
+                target_widget.setGraphicsEffect(None)
             
             # 清除旧文本
             target_widget.clear()
@@ -184,10 +256,15 @@ class DynamicIslandManager:
             except ImportError:
                 pass
             
-            # 设置新文本和样式
+            # 设置新文本和无阴影样式
             target_widget.setText(new_text)
-            if style:
-                target_widget.setStyleSheet(style)
+            enhanced_style = style + """
+                border: none;
+                outline: none;
+                background-color: transparent;
+            """
+            if enhanced_style:
+                target_widget.setStyleSheet(enhanced_style)
             
             # 强制重绘
             target_widget.update()
@@ -231,4 +308,4 @@ class DynamicIslandManager:
         pass
 
 # 使用示例
-# 创建 DynamicIslandManager 实例，并在每个回合调用 start_round()。
+# 创建 DynamicIslandManager 实例，并在每个回合调用 start_round()。# 使用示例# 创建 DynamicIslandManager 实例，并在每个回合调用 start_round()。

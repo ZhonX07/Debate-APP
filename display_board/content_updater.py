@@ -260,8 +260,15 @@ class ContentUpdater:
             
             if hasattr(container, 'progress_bar'):
                 current_time = timer_state['current_time']
-                # 这里需要总时间来计算进度，暂时使用当前时间
-                container.progress_bar._value = max(0, current_time)
+                total_time = 100  # 默认最大值
+                
+                # 获取总时间，用于计算进度
+                if hasattr(widget, 'current_round') and widget.current_round:
+                    total_time = widget.current_round.get('time', 100)
+                
+                # 设置进度条最大值和当前值
+                container.progress_bar.setMaximum(total_time)
+                container.progress_bar.setValue(current_time)
                 container.progress_bar.update()
             
             if hasattr(container, 'countdown_label'):
@@ -288,13 +295,20 @@ class ContentUpdater:
                 
             container = widget.timer_containers['free_debate']
             
+            # 获取总时间，用于计算进度
+            total_time = 100  # 默认最大值
+            if hasattr(widget, 'current_round') and widget.current_round:
+                total_time = widget.current_round.get('time', 100) // 2  # 自由辩论时间的一半
+            
             # 更新正方计时器
             if hasattr(container, 'aff_group'):
                 aff_group = container.aff_group
                 aff_time = timer_state['affirmative_time']
                 
                 if hasattr(aff_group, 'progress_bar'):
-                    aff_group.progress_bar._value = max(0, aff_time)
+                    # 设置进度条最大值和当前值
+                    aff_group.progress_bar.setMaximum(total_time)
+                    aff_group.progress_bar.setValue(aff_time)
                     aff_group.progress_bar.update()
                 
                 if hasattr(aff_group, 'countdown_label'):
@@ -314,7 +328,9 @@ class ContentUpdater:
                 neg_time = timer_state['negative_time']
                 
                 if hasattr(neg_group, 'progress_bar'):
-                    neg_group.progress_bar._value = max(0, neg_time)
+                    # 设置进度条最大值和当前值
+                    neg_group.progress_bar.setMaximum(total_time)
+                    neg_group.progress_bar.setValue(neg_time)
                     neg_group.progress_bar.update()
                 
                 if hasattr(neg_group, 'countdown_label'):

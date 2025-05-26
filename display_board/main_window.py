@@ -3,7 +3,7 @@
 
 import sys
 from PyQt5.QtWidgets import (QMainWindow, QLabel, QVBoxLayout, QHBoxLayout, 
-                            QWidget, QStackedLayout, QApplication)
+                            QWidget, QStackedLayout, QApplication, QGraphicsDropShadowEffect)
 from PyQt5.QtCore import Qt, QTimer, QTime, pyqtSignal
 from PyQt5.QtGui import QFont
 
@@ -127,10 +127,28 @@ class DisplayBoard(QMainWindow):
         self.preview_widget_top = self.ui_components.create_preview_widget_top()
         self.active_round_widget_top = self.ui_components.create_active_round_widget_top()
         
+        # 移除所有阴影效果
+        self._remove_shadow_from_widget(self.preview_widget_top)
+        self._remove_shadow_from_widget(self.active_round_widget_top)
+        
         self.topic_stack.addWidget(self.preview_widget_top)
         self.topic_stack.addWidget(self.active_round_widget_top)
         self.topic_stack.setCurrentWidget(self.preview_widget_top)
-
+        
+    def _remove_shadow_from_widget(self, widget):
+        """递归移除控件及其子控件的阴影效果"""
+        if not widget:
+            return
+            
+        # 移除当前控件的阴影效果
+        if isinstance(widget.graphicsEffect(), QGraphicsDropShadowEffect):
+            widget.setGraphicsEffect(None)
+            
+        # 递归处理所有子控件
+        for child in widget.findChildren(QWidget):
+            if isinstance(child.graphicsEffect(), QGraphicsDropShadowEffect):
+                child.setGraphicsEffect(None)
+                
     def _create_sides_layout(self):
         """创建左右两侧布局"""
         sides_layout = QHBoxLayout()
@@ -170,63 +188,75 @@ class DisplayBoard(QMainWindow):
     # 计时器事件处理
     def _on_timer_updated(self):
         """计时器更新事件"""
-        timer_state = self.timer_manager.get_timer_state()
-        self.content_updater.update_timer_display(self.active_round_widget_top, timer_state)
-        
-        # 更新控制面板显示
-        if self.control_panel:
-            if timer_state['is_free_debate']:
-                if timer_state['affirmative_timer_active']:
-                    self.control_panel.update_lcd_display(timer_state['affirmative_time'], 'affirmative')
-                elif timer_state['negative_timer_active']:
-                    self.control_panel.update_lcd_display(timer_state['negative_time'], 'negative')
-            else:
-                self.control_panel.update_lcd_display(timer_state['current_time'])
+        try:
+            timer_state = self.timer_manager.get_timer_state()
+            self.content_updater.update_timer_display(self.active_round_widget_top, timer_state)
+            
+            # 更新控制面板显示
+            if self.control_panel and hasattr(self.control_panel, 'update_lcd_display'):
+                if timer_state['is_free_debate']:
+                    if timer_state['affirmative_timer_active']:
+                        self.control_panel.update_lcd_display(timer_state['affirmative_time'], 'affirmative')
+                    elif timer_state['negative_timer_active']:
+                        self.control_panel.update_lcd_display(timer_state['negative_time'], 'negative')
+                else:
+                    self.control_panel.update_lcd_display(timer_state['current_time'])
+        except Exception as e:
+            logger.error(f"计时器更新事件处理时出错: {e}", exc_info=True)
 
     def _on_timer_finished(self):
         """计时器结束事件"""
-        logger.info("标准计时器结束")
-        next_round_idx = self.current_round_index + 1
-        
-        # 重置辩手高亮
-        side_widgets = {
-            'affirmative': self.affirmative_widget,
-            'negative': self.negative_widget
-        }
-        self.content_updater.highlight_active_debater(side_widgets, None)
-        
-        # 更新预览内容
-        if next_round_idx < len(self.rounds):
-            round_data = self.rounds[next_round_idx]
-        else:
-            round_data = self.rounds[self.current_round_index] if self.current_round_index >= 0 else None
+        try:
+            logger.info("标准计时器结束")
+            next_round_idx = self.current_round_index + 1
             
-        self.content_updater.update_preview_content(
-            self.preview_widget_top, round_data, next_round_idx
-        )
-        
-        # 切换到预览模式
-        self.animation_manager.animate_widget_transition(
-            self.active_round_widget_top, 
-            self.preview_widget_top, 
-            self.topic_stack
-        )
-        
-        # 更新控制面板状态
-        if self.control_panel:
-            self.control_panel.on_round_finished()
+            # 重置辩手高亮
+            side_widgets = {
+                'affirmative': self.affirmative_widget,
+                'negative': self.negative_widget
+            }
+            self.content_updater.highlight_active_debater(side_widgets, None)
+            
+            # 更新预览内容
+            if next_round_idx < len(self.rounds):
+                round_data = self.rounds[next_round_idx]
+            else:
+                round_data = self.rounds[self.current_round_index] if self.current_round_index >= 0 else None
+                
+            self.content_updater.update_preview_content(
+                self.preview_widget_top, round_data, next_round_idx
+            )
+            
+            # 切换到预览模式
+            self.animation_manager.animate_widget_transition(
+                self.active_round_widget_top, 
+                self.preview_widget_top, 
+                self.topic_stack
+            )
+            
+            # 更新控制面板状态
+            if self.control_panel and hasattr(self.control_panel, 'on_round_finished'):
+                self.control_panel.on_round_finished()
+        except Exception as e:
+            logger.error(f"计时器结束事件处理时出错: {e}", exc_info=True)
 
     def _on_affirmative_timer_finished(self):
         """正方计时器结束事件"""
-        logger.info("正方计时器结束")
-        if self.control_panel:
-            self.control_panel.on_affirmative_timer_finished()
+        try:
+            logger.info("正方计时器结束")
+            if self.control_panel and hasattr(self.control_panel, 'on_affirmative_timer_finished'):
+                self.control_panel.on_affirmative_timer_finished()
+        except Exception as e:
+            logger.error(f"正方计时器结束事件处理时出错: {e}", exc_info=True)
 
     def _on_negative_timer_finished(self):
         """反方计时器结束事件"""
-        logger.info("反方计时器结束")
-        if self.control_panel:
-            self.control_panel.on_negative_timer_finished()
+        try:
+            logger.info("反方计时器结束")
+            if self.control_panel and hasattr(self.control_panel, 'on_negative_timer_finished'):
+                self.control_panel.on_negative_timer_finished()
+        except Exception as e:
+            logger.error(f"反方计时器结束事件处理时出错: {e}", exc_info=True)
 
     # 公共方法接口
     def set_debate_config(self, config):
@@ -367,6 +397,9 @@ class DisplayBoard(QMainWindow):
                 self.active_round_widget_top, 
                 self.current_round
             )
+            
+            # 保存当前环节信息到活动控件中，供计时器使用
+            self.active_round_widget_top.current_round = self.current_round
             
             # 切换到活动视图
             self.animation_manager.animate_widget_transition(

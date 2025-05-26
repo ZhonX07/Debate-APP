@@ -4,8 +4,9 @@
 from PyQt5.QtWidgets import (QMainWindow, QLabel, QVBoxLayout, QHBoxLayout, 
                             QWidget, QPushButton, QGridLayout, QFrame, 
                             QFileDialog, QMessageBox, QGraphicsDropShadowEffect, 
-                            QGroupBox, QStyle, QListWidget, QStackedLayout, QLCDNumber)
-from PyQt5.QtCore import Qt, pyqtSignal
+                            QGroupBox, QStyle, QListWidget, QStackedLayout, QLCDNumber,
+                            QApplication)
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from PyQt5.QtGui import QFont, QColor
 
 import os
@@ -286,65 +287,13 @@ class ControlPanel(QMainWindow):
         self.disable_controls()
         logger.debug("ControlPanel.initUI 结束")
     
-    def load_config(self):
-        """加载配置文件"""
-        logger.info("加载配置文件")
-        options = QFileDialog.Options()
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "选择配置文件", "", "JSON Files (*.json)", options=options
-        )
-        if file_path:
-            try:
-                # 清除所有相关区域内容
-                self.rounds_list.clear()
-                self.current_round_label.setText("未选择环节")
-                self.current_time_label.setText("时长: 0分钟")
-                self.status_value.setText("就绪")
-                
-                # 读取并验证配置文件
-                config = DebateConfig.from_file(file_path)
-                self.debate_config = config
-                self.current_config_file = file_path
-                self.config_path_label.setText(os.path.basename(file_path))
-                
-                # 更新显示面板配置
-                self.display_board.set_debate_config(config.to_dict())
-                
-                # 更新环节列表
-                self.rounds_list.clear()
-                for index, round_info in enumerate(config.get_rounds()):
-                    side = "正方" if round_info['side'] == 'affirmative' else "反方"
-                    item_text = f"{index+1}. [{side}] {round_info['speaker']} - {round_info['type']} ({round_info['time']}秒)"
-                    self.rounds_list.addItem(item_text)
-                
-                # 启用控制按钮
-                self.enable_controls()
-                self.status_value.setText("配置已加载")
-                logger.info(f"配置文件加载成功: {file_path}")
-                
-                # 选择第一个环节
-                if self.rounds_list.count() > 0:
-                    self.rounds_list.setCurrentRow(0)
-                    
-            except ConfigValidationError as e:
-                QMessageBox.critical(self, "配置错误", f"配置文件验证失败:\n{e}")
-                logger.error(f"配置文件验证失败: {e}")
-            except Exception as e:
-                QMessageBox.critical(self, "错误", f"无法加载配置文件:\n{e}")
-                logger.error(f"加载配置文件失败: {e}", exc_info=True)
-    
     def load_config_from_path(self, file_path):
-        """从指定路径加载配置文件
-        
-        Args:
-            file_path: 配置文件路径
-        """
-        if not os.path.exists(file_path):
-            logger.error(f"配置文件不存在: {file_path}")
-            QMessageBox.critical(self, "错误", f"找不到配置文件: {file_path}")
-            return False
-        
+        """从指定路径加载配置文件"""
         try:
+            if not os.path.exists(file_path):
+                logger.error(f"配置文件不存在: {file_path}")
+                return False
+                
             # 清除所有相关区域内容
             self.rounds_list.clear()
             self.current_round_label.setText("未选择环节")
@@ -356,144 +305,383 @@ class ControlPanel(QMainWindow):
             self.debate_config = config
             self.current_config_file = file_path
             self.config_path_label.setText(os.path.basename(file_path))
+
+            # 获取回合数据并验证
+            rounds_data = config.get_rounds()
+            logger.info(f"配置文件包含 {len(rounds_data)} 个回合")
             
-            # 更新显示面板配置
-            self.display_board.set_debate_config(config.to_dict())
+            if not rounds_data:
+                logger.warning("配置文件中没有回合数据")
+                QMessageBox.warning(self, "警告", "配置文件中没有找到回合信息")
+                return False
+            
             # 更新环节列表
             self.rounds_list.clear()
-            for index, round_info in enumerate(config.get_rounds()):
-                side = "正方" if round_info['side'] == 'affirmative' else "反方"
-                item_text = f"{index+1}. [{side}] {round_info['speaker']} - {round_info['type']} ({round_info['time']}秒)"
-                self.rounds_list.addItem(item_text)
+            for index, round_info in enumerate(rounds_data):
+                try:
+                    # 验证回合数据完整性
+                    if not isinstance(round_info, dict):
+                        logger.error(f"回合 {index+1} 数据格式错误")
+                        continue
+                        
+                    side = round_info.get('side', '')
+                    speaker = round_info.get('speaker', '')
+                    round_type = round_info.get('type', '')
+                    time_seconds = round_info.get('time', 0)
+                    
+                    if not all([side, speaker, round_type]) and round_type != '自由辩论':
+                        logger.error(f"回合 {index+1} 缺少必要信息: side={side}, speaker={speaker}, type={round_type}")
+                        continue
+                    
+                    # 处理自由辩论特殊情况
+                    if round_type == '自由辩论':
+                        side_text = "双方"
+                    else:
+                        side_text = "正方" if side == 'affirmative' else "反方"
+                    
+                    item_text = f"{index+1}. [{side_text}] {speaker} - {round_type} ({time_seconds}秒)"
+                    self.rounds_list.addItem(item_text)
+                    logger.debug(f"添加回合: {item_text}")
+                    
+                except Exception as e:
+                    logger.error(f"处理回合 {index+1} 时出错: {e}")
+                    continue
+            
+            # 验证是否成功添加了回合
+            if self.rounds_list.count() == 0:
+                logger.error("没有成功添加任何回合到列表中")
+                QMessageBox.critical(self, "错误", "配置文件中的回合数据无法解析")
+                return False
+            
+            logger.info(f"成功添加 {self.rounds_list.count()} 个回合到列表")
+            
+            # 使用单次定时器确保UI完成清理
+            QTimer.singleShot(100, lambda: self.display_board.set_debate_config(config.to_dict()))
             
             # 启用控制按钮
             self.enable_controls()
             self.status_value.setText("配置已加载")
             logger.info(f"配置文件加载成功: {file_path}")
             
-            # 选择第一个环节
-            if self.rounds_list.count() > 0:
-                self.rounds_list.setCurrentRow(0)
-                
-            # 添加检查辩手信息是否正确加载的日志
-            if 'debater_roles' in config.to_dict():
-                roles = config.to_dict()['debater_roles']
-                logger.info(f"已加载辩手信息: {len(roles)} 条记录")
+            # 强制刷新界面并选择第一个环节
+            self.rounds_list.viewport().update()  # 强制刷新列表控件
+            self.rounds_list.setCurrentRow(0)
+            QApplication.processEvents()  # 处理界面事件队列
             
             return True
-                
-        except ConfigValidationError as e:
-            QMessageBox.critical(self, "配置错误", f"配置文件验证失败:\n{e}")
-            logger.error(f"配置文件验证失败: {e}")
-        except Exception as e:
-            QMessageBox.critical(self, "错误", f"无法加载配置文件:\n{e}")
-            logger.error(f"加载配置文件失败: {e}", exc_info=True)
-        
-        return False
-    
-    def disable_controls(self):
-        """禁用所有控制，直到加载配置"""
-        logger.info("禁用所有控制")
-        
-        # 计时器相关按钮
-        self.timer_control_btn.setEnabled(False)
-        self.reset_timer_btn.setEnabled(False)
-        self.aff_timer_btn.setEnabled(False)
-        self.neg_timer_btn.setEnabled(False)
-        self.reset_free_debate_btn.setEnabled(False)
-        self.terminate_round_btn.setEnabled(False)
-        
-        # 导航按钮
-        self.prev_btn.setEnabled(False)
-        self.next_btn.setEnabled(False)
-        self.start_btn.setEnabled(False)
-        
-    def enable_controls(self):
-        """启用所有控制"""
-        logger.info("启用所有控制")
-        # 计时器相关
-        self.timer_control_btn.setEnabled(True)
-        self.reset_timer_btn.setEnabled(True)
-        self.aff_timer_btn.setEnabled(True)
-        self.neg_timer_btn.setEnabled(True)
-        self.reset_free_debate_btn.setEnabled(True)
-        self.terminate_round_btn.setEnabled(True)
-        # 导航按钮
-        self.prev_btn.setEnabled(True)
-        self.next_btn.setEnabled(True)
-        self.start_btn.setEnabled(True)
-    
-    def prev_round(self):
-        """切换到上一个环节：更新选中行并发射信号"""
-        logger.info("切换到上一环节")
-        current = self.rounds_list.currentRow()
-        if current > 0:
-            new_index = current - 1
-            self.rounds_list.setCurrentRow(new_index)
-            self.roundSelected.emit(new_index)
-            logger.info(f"切换到上一环节: {new_index}")
 
-    def next_round(self):
-        """切换到下一个环节：更新选中行并发射信号"""
-        logger.info("切换到下一环节")
-        current = self.rounds_list.currentRow()
-        if current < self.rounds_list.count() - 1:
-            new_index = current + 1
-            self.rounds_list.setCurrentRow(new_index)
-            self.roundSelected.emit(new_index)
-            logger.info(f"切换到下一环节: {new_index}")
+        except ConfigValidationError as e:
+            logger.error(f"配置文件验证失败: {e}")
+            QMessageBox.critical(self, "配置错误", f"配置文件验证失败:\n{e}")
+            return False
+        except Exception as e:
+            logger.error(f"加载配置文件失败: {e}", exc_info=True)
+            QMessageBox.critical(self, "错误", f"无法加载配置文件:\n{e}")
+            return False
+            
+    def load_config(self):
+        """加载配置文件"""
+        logger.info("加载配置文件")
+        options = QFileDialog.Options()
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "选择配置文件", "", "JSON Files (*.json)", options=options)
+        if file_path:
+            # 使用统一的加载方法
+            self.load_config_from_path(file_path)
+
+    def start_current_round(self):
+        """开始当前选中的环节"""
+        try:
+            if not self.debate_config or self.rounds_list.currentRow() == -1:
+                QMessageBox.warning(self, "警告", "请先选择要开始的环节")
+                return
+
+            current_index = self.rounds_list.currentRow()
+            round_info = self.debate_config.get_rounds()[current_index]
+            
+            # 验证时间设置
+            time_seconds = round_info.get('time', 0)
+            if not isinstance(time_seconds, (int, float)) or time_seconds <= 0:
+                QMessageBox.critical(self, "错误", "无效的时间设置")
+                return
+
+            # 更新显示板 - 传递索引而不是字典
+            self.display_board.start_round(current_index)
+            self.status_value.setText("进行中")
+            
+            # 根据环节类型初始化计时器
+            timer_manager = self.display_board.timer_manager
+            logger.info(f"计时器管理器类型: {type(timer_manager)}")
+            
+            if self.is_free_debate:
+                # 自由辩论模式 - 每方分配一半时间
+                half_time = time_seconds // 2
+                if hasattr(self, 'aff_timer_lcd'):
+                    self.aff_timer_lcd.display(self.format_time(half_time))
+                if hasattr(self, 'neg_timer_lcd'):
+                    self.neg_timer_lcd.display(self.format_time(half_time))
+                logger.info(f"自由辩论模式：每方 {half_time} 秒")
+            else:
+                # 普通环节 - 设置并启动计时器
+                logger.info(f"普通环节模式：总时长 {time_seconds} 秒")
+                
+                try:
+                    # 设置计时器持续时间
+                    timer_manager.set_duration(time_seconds)
+                    logger.debug(f"已设置计时器持续时间: {time_seconds}秒")
+                    
+                    # 重置计时器到初始状态
+                    timer_manager.reset()
+                    logger.debug("已重置计时器")
+                    
+                    # 启动计时器
+                    if timer_manager.start():
+                        logger.debug("已启动计时器")
+                    else:
+                        logger.warning("计时器启动失败")
+                        
+                except Exception as timer_error:
+                    logger.error(f"计时器操作失败: {timer_error}")
+            
+            # 启用计时器控制
+            self.timer_control_btn.setEnabled(True)
+            self.reset_timer_btn.setEnabled(True)
+            
+            # 更新按钮文本
+            self.timer_control_btn.setText("暂停计时")
+            self.timer_control_btn.setIcon(self.style().standardIcon(getattr(QStyle, "SP_MediaPause")))
+            
+            logger.info(f"环节 {current_index+1} 已开始")
+
+        except Exception as e:
+            logger.error(f"开始环节时出错: {e}", exc_info=True)
+            QMessageBox.critical(self, "错误", f"无法开始环节:\n{e}")
+
+    def toggle_timer(self):
+        """切换计时器状态（开始/暂停）"""
+        try:
+            timer_manager = self.display_board.timer_manager
+            logger.debug(f"切换计时器状态，timer_manager类型: {type(timer_manager)}")
+            
+            # 检查计时器是否在运行
+            is_running = timer_manager.is_running()
+            logger.debug(f"计时器运行状态: {is_running}")
+            
+            if is_running:
+                # 暂停计时器
+                if timer_manager.pause():
+                    logger.debug("已暂停计时器")
+                    self.timer_control_btn.setText("继续计时")
+                    self.timer_control_btn.setIcon(self.style().standardIcon(getattr(QStyle, "SP_MediaPlay")))
+                    self.status_value.setText("已暂停")
+                else:
+                    logger.warning("暂停计时器失败")
+            else:
+                # 启动/恢复计时器
+                started = False
+                if hasattr(self, 'current_round_time') and self.current_round_time > 0:
+                    # 如果有当前回合时间，先设置时间再启动
+                    timer_manager.set_duration(self.current_round_time)
+                    started = timer_manager.start()
+                else:
+                    # 否则尝试恢复
+                    started = timer_manager.resume()
+                
+                if started:
+                    logger.debug("已启动/恢复计时器")
+                    self.timer_control_btn.setText("暂停计时")
+                    self.timer_control_btn.setIcon(self.style().standardIcon(getattr(QStyle, "SP_MediaPause")))
+                    self.status_value.setText("进行中")
+                else:
+                    logger.warning("启动/恢复计时器失败")
+                
+            logger.debug("计时器状态已切换")
+        except Exception as e:
+            logger.error(f"切换计时器状态时出错: {e}", exc_info=True)
+
+    def reset_timer(self):
+        """重置计时器到初始状态"""
+        try:
+            timer_manager = self.display_board.timer_manager
+            logger.debug("重置计时器")
+            
+            # 重置计时器
+            if timer_manager.reset():
+                logger.debug("计时器重置成功")
+            else:
+                logger.warning("计时器重置失败")
+            
+            # 如果有当前回合时间，重新设置
+            if hasattr(self, 'current_round_time') and self.current_round_time > 0:
+                timer_manager.set_duration(self.current_round_time)
+                logger.debug(f"已重新设置计时器时间: {self.current_round_time}秒")
+            
+            self.timer_control_btn.setText("开始计时")
+            self.timer_control_btn.setIcon(self.style().standardIcon(getattr(QStyle, "SP_MediaPlay")))
+            self.status_value.setText("已重置")
+            
+            # 重置自由辩论计时器显示
+            if self.is_free_debate and hasattr(self, 'current_round_time'):
+                half_time = self.current_round_time // 2
+                if hasattr(self, 'aff_timer_lcd'):
+                    self.aff_timer_lcd.display(self.format_time(half_time))
+                if hasattr(self, 'neg_timer_lcd'):
+                    self.neg_timer_lcd.display(self.format_time(half_time))
+                logger.debug(f"已重置自由辩论计时器显示: {half_time}秒")
+                
+            logger.info("计时器已重置")
+        except Exception as e:
+            logger.error(f"重置计时器时出错: {e}", exc_info=True)
+
+    def terminate_current_round(self):
+        """终止当前环节"""
+        try:
+            timer_manager = self.display_board.timer_manager
+            if timer_manager.terminate_current_round():
+                logger.info("当前环节已终止")
+                self.roundTerminated.emit()
+                self.status_value.setText("已终止")
+                QMessageBox.information(self, "提示", "环节已强制终止")
+            else:
+                logger.error("终止环节失败")
+                QMessageBox.critical(self, "错误", "无法终止当前环节")
+        except Exception as e:
+            logger.error(f"终止环节时出错: {e}", exc_info=True)
+
+    def toggle_affirmative_timer(self):
+        """切换正方计时器状态"""
+        try:
+            if not self.is_free_debate:
+                logger.warning("只有在自由辩论环节才能使用正方计时器")
+                return
+                
+            timer_manager = self.display_board.timer_manager
+            logger.debug("切换正方计时器状态")
+            
+            # 切换正方计时器
+            if timer_manager.toggle_affirmative_timer():
+                # 更新按钮状态
+                timer_state = timer_manager.get_timer_state()
+                if timer_state['affirmative_timer_active']:
+                    self.aff_timer_btn.setText("暂停计时")
+                    self.aff_timer_btn.setIcon(self.style().standardIcon(getattr(QStyle, "SP_MediaPause")))
+                    logger.debug("正方计时器已启动")
+                else:
+                    self.aff_timer_btn.setText("继续计时")
+                    self.aff_timer_btn.setIcon(self.style().standardIcon(getattr(QStyle, "SP_MediaPlay")))
+                    logger.debug("正方计时器已暂停")
+            else:
+                logger.warning("正方计时器切换失败")
+                
+            logger.debug("正方计时器状态已切换")
+        except Exception as e:
+            logger.error(f"切换正方计时器时出错: {e}", exc_info=True)
+
+    def toggle_negative_timer(self):
+        """切换反方计时器状态"""
+        try:
+            if not self.is_free_debate:
+                logger.warning("只有在自由辩论环节才能使用反方计时器")
+                return
+                
+            timer_manager = self.display_board.timer_manager
+            logger.debug("切换反方计时器状态")
+            
+            # 切换反方计时器
+            if timer_manager.toggle_negative_timer():
+                # 更新按钮状态
+                timer_state = timer_manager.get_timer_state()
+                if timer_state['negative_timer_active']:
+                    self.neg_timer_btn.setText("暂停计时")
+                    self.neg_timer_btn.setIcon(self.style().standardIcon(getattr(QStyle, "SP_MediaPause")))
+                    logger.debug("反方计时器已启动")
+                else:
+                    self.neg_timer_btn.setText("继续计时")
+                    self.neg_timer_btn.setIcon(self.style().standardIcon(getattr(QStyle, "SP_MediaPlay")))
+                    logger.debug("反方计时器已暂停")
+            else:
+                logger.warning("反方计时器切换失败")
+                
+            logger.debug("反方计时器状态已切换")
+        except Exception as e:
+            logger.error(f"切换反方计时器时出错: {e}", exc_info=True)
 
     def on_round_selected(self, index):
         """当环节列表中的选中项变化时触发"""
         try:
-            if index >= 0 and self.debate_config:
-                rounds = self.debate_config.get_rounds()
+            logger.debug(f"选择回合索引: {index}")
+            
+            if index < 0:
+                logger.debug("索引小于0，清空显示")
+                self._set_default_round_display()
+                return
                 
-                # 验证索引有效性
-                if index >= len(rounds):
-                    logger.error(f"环节索引 {index} 超出范围 (最大: {len(rounds)-1})")
+            if not self.debate_config:
+                logger.warning("没有加载配置文件")
+                return
+                
+            rounds = self.debate_config.get_rounds()
+            
+            # 验证索引有效性
+            if index >= len(rounds):
+                logger.error(f"环节索引 {index} 超出范围 (最大: {len(rounds)-1})")
+                return
+            
+            round_info = rounds[index]
+            logger.debug(f"选择的回合信息: {round_info}")
+            
+            # 验证环节数据完整性
+            required_keys = ['side', 'speaker', 'type', 'time']
+            for key in required_keys:
+                if key not in round_info:
+                    logger.error(f"环节数据缺少必要字段: {key}")
                     return
+            
+            # 更新显示内容
+            side = round_info['side']
+            if round_info['type'] == '自由辩论':
+                side_text = "双方"
+            else:
+                side_text = "正方" if side == 'affirmative' else "反方"
+            
+            # 验证时间数据
+            time_value = round_info.get('time', 0)
+            if not isinstance(time_value, (int, float)) or time_value < 0:
+                logger.error(f"环节时间值无效: {time_value}")
+                return
+            
+            # 保存当前回合时间，供其他方法使用
+            self.current_round_time = time_value
+            
+            time_min = int(time_value) // 60
+            time_sec = int(time_value) % 60
+            
+            # 安全更新标签内容
+            if hasattr(self, 'current_round_label') and self.current_round_label:
+                self.current_round_label.setText(f"{side_text} {round_info['speaker']} - {round_info['type']}")
+            
+            if hasattr(self, 'current_time_label') and self.current_time_label:
+                self.current_time_label.setText(f"时长: {time_min}分{time_sec}秒")
+            
+            # 判断是否为自由辩论
+            self.is_free_debate = round_info['type'] == '自由辩论'
+            
+            # 切换计时器界面
+            if hasattr(self, 'timer_controls_stack'):
+                self.timer_controls_stack.setCurrentIndex(1 if self.is_free_debate else 0)
                 
-                round_info = rounds[index]
-                
-                # 验证环节数据完整性
-                required_keys = ['side', 'speaker', 'type', 'time']
-                for key in required_keys:
-                    if key not in round_info:
-                        logger.error(f"环节数据缺少必要字段: {key}")
-                        self._set_default_round_display()
-                        return
-                
-                # 更新显示内容
-                side = "正方" if round_info['side'] == 'affirmative' else "反方"
-                
-                # 验证时间数据
-                time_value = round_info.get('time', 0)
-                if not isinstance(time_value, (int, float)) or time_value < 0:
-                    logger.warning(f"无效的时间值: {time_value}，使用默认值0")
-                    time_value = 0
-                
-                time_min = int(time_value) // 60
-                time_sec = int(time_value) % 60
-                
-                # 安全更新标签内容
-                if hasattr(self, 'current_round_label') and self.current_round_label:
-                    display_text = f"{side} {round_info['speaker']} - {round_info['type']}"
-                    self.current_round_label.setText(display_text)
-                
-                if hasattr(self, 'current_time_label') and self.current_time_label:
-                    self.current_time_label.setText(f"时长: {time_min}分{time_sec}秒")
-                
-                # 检查是否为自由辩论环节
-                self.is_free_debate = round_info.get('type') == "自由辩论"
-                
-                # 更新计时器控制界面
-                self._update_timer_controls(round_info)
-                
-                # 发射信号通知显示板更新预览
-                self.roundSelected.emit(index)
-                logger.debug(f"已选择环节: {index}")
-                
+            # 如果是自由辩论，初始化计时器显示
+            if self.is_free_debate:
+                half_time = time_value // 2
+                if hasattr(self, 'aff_timer_lcd'):
+                    self.aff_timer_lcd.display(self.format_time(half_time))
+                if hasattr(self, 'neg_timer_lcd'):
+                    self.neg_timer_lcd.display(self.format_time(half_time))
+            
+            # 发送环节选择信号
+            self.roundSelected.emit(index)
+            logger.info(f"已选择回合 {index+1}: {side_text} {round_info['speaker']} - {round_info['type']}")
+            
         except Exception as e:
             logger.error(f"处理环节选择时出错: {e}", exc_info=True)
             self._set_default_round_display()
@@ -502,221 +690,132 @@ class ControlPanel(QMainWindow):
         """设置默认的环节显示内容"""
         try:
             if hasattr(self, 'current_round_label') and self.current_round_label:
-                self.current_round_label.setText("环节数据错误")
-            if hasattr(self, 'current_time_label') and self.current_time_label:
-                self.current_time_label.setText("时长: 0分0秒")
-        except Exception as e:
-            logger.error(f"设置默认环节显示时出错: {e}", exc_info=True)
-
-    def _update_timer_controls(self, round_info):
-        """更新计时器控制界面"""
-        try:
-            if not hasattr(self, 'timer_controls_stack') or not self.timer_controls_stack:
-                return
-                
-            if self.is_free_debate:
-                # 显示自由辩论计时器控制
-                self.timer_controls_stack.setCurrentIndex(1)
-                time_value = round_info.get('time', 0)
-                if isinstance(time_value, (int, float)) and time_value > 0:
-                    half_time = int(time_value) // 2
-                    min_half = half_time // 60
-                    sec_half = half_time % 60
-                    
-                    if hasattr(self, 'aff_timer_lcd') and self.aff_timer_lcd:
-                        self.aff_timer_lcd.display(f"{min_half:02d}:{sec_half:02d}")
-                    if hasattr(self, 'neg_timer_lcd') and self.neg_timer_lcd:
-                        self.neg_timer_lcd.display(f"{min_half:02d}:{sec_half:02d}")
-            else:
-                # 显示标准计时器控制
-                self.timer_controls_stack.setCurrentIndex(0)
-                
-        except Exception as e:
-            logger.error(f"更新计时器控制界面时出错: {e}", exc_info=True)
-
-    def load_config_from_path(self, file_path):
-        """从指定路径加载配置文件"""
-        if not os.path.exists(file_path):
-            logger.error(f"配置文件不存在: {file_path}")
-            QMessageBox.critical(self, "错误", f"找不到配置文件: {file_path}")
-            return False
-        
-        try:
-            # 清除所有相关区域内容
-            self._clear_all_controls()
-            
-            # 读取并验证配置文件
-            config = DebateConfig.from_file(file_path)
-            self.debate_config = config
-            self.current_config_file = file_path
-            
-            # 安全更新配置路径标签
-            if hasattr(self, 'config_path_label') and self.config_path_label:
-                self.config_path_label.setText(os.path.basename(file_path))
-            
-            # 更新显示面板配置
-            if hasattr(self, 'display_board') and self.display_board:
-                success = self.display_board.set_debate_config(config.to_dict())
-                if not success:
-                    logger.error("显示面板配置更新失败")
-                    return False
-            
-            # 更新环节列表
-            self._update_rounds_list(config)
-            
-            # 启用控制按钮
-            self.enable_controls()
-            
-            # 安全更新状态
-            if hasattr(self, 'status_value') and self.status_value:
-                self.status_value.setText("配置已加载")
-            
-            logger.info(f"配置文件加载成功: {file_path}")
-            
-            # 选择第一个环节
-            if hasattr(self, 'rounds_list') and self.rounds_list.count() > 0:
-                self.rounds_list.setCurrentRow(0)
-            
-            return True
-                
-        except Exception as e:
-            logger.error(f"加载配置文件失败: {e}", exc_info=True)
-            QMessageBox.critical(self, "错误", f"无法加载配置文件:\n{e}")
-            return False
-
-    def _clear_all_controls(self):
-        """清除所有控制元素的内容"""
-        try:
-            if hasattr(self, 'rounds_list') and self.rounds_list:
-                self.rounds_list.clear()
-            if hasattr(self, 'current_round_label') and self.current_round_label:
                 self.current_round_label.setText("未选择环节")
             if hasattr(self, 'current_time_label') and self.current_time_label:
                 self.current_time_label.setText("时长: 0分钟")
-            if hasattr(self, 'status_value') and self.status_value:
-                self.status_value.setText("就绪")
         except Exception as e:
-            logger.error(f"清除控制元素时出错: {e}", exc_info=True)
+            logger.error(f"设置默认环节显示内容时出错: {e}", exc_info=True)
 
-    def _update_rounds_list(self, config):
-        """更新环节列表"""
+    def prev_round(self):
+        """切换到上一个环节"""
         try:
-            if not hasattr(self, 'rounds_list') or not self.rounds_list:
-                return
-                
-            self.rounds_list.clear()
-            rounds = config.get_rounds()
-            
-            for index, round_info in enumerate(rounds):
-                # 验证环节数据
-                if not all(key in round_info for key in ['side', 'speaker', 'type', 'time']):
-                    logger.warning(f"环节 {index} 数据不完整，跳过")
-                    continue
-                
-                side = "正方" if round_info['side'] == 'affirmative' else "反方"
-                time_value = round_info.get('time', 0)
-                
-                # 确保时间值为有效数字
-                if not isinstance(time_value, (int, float)) or time_value < 0:
-                    time_value = 0
-                
-                item_text = f"{index+1}. [{side}] {round_info['speaker']} - {round_info['type']} ({int(time_value)}秒)"
-                self.rounds_list.addItem(item_text)
-                
+            current_index = self.rounds_list.currentRow()
+            if current_index > 0:
+                self.rounds_list.setCurrentRow(current_index - 1)
         except Exception as e:
-            logger.error(f"更新环节列表时出错: {e}", exc_info=True)
+            logger.error(f"切换到上一环节时出错: {e}", exc_info=True)
 
-    def start_current_round(self):
-        """开始当前选中环节"""
-        index = self.rounds_list.currentRow()
-        if index < 0:
-            QMessageBox.warning(self, "提示", "请先选择一个环节！")
-            return
-        # 调用显示面板的start_round方法
-        if self.display_board.start_round(index):
-            self.status_value.setText(f"已开始第{index+1}个环节")
-            # 根据环节类型设置计时器控制界面
-            if self.is_free_debate:
-                self.timer_controls_stack.setCurrentIndex(1)
+    def next_round(self):
+        """切换到下一个环节"""
+        try:
+            current_index = self.rounds_list.currentRow()
+            if current_index < self.rounds_list.count() - 1:
+                self.rounds_list.setCurrentRow(current_index + 1)
+        except Exception as e:
+            logger.error(f"切换到下一环节时出错: {e}", exc_info=True)
+
+    def enable_controls(self):
+        """启用所有控制按钮"""
+        try:
+            self.prev_btn.setEnabled(True)
+            self.next_btn.setEnabled(True)
+            self.start_btn.setEnabled(True)
+            self.timer_control_btn.setEnabled(True)
+            self.reset_timer_btn.setEnabled(True)
+            self.terminate_round_btn.setEnabled(True)
+            logger.debug("所有控制已启用")
+        except Exception as e:
+            logger.error(f"启用控制时出错: {e}", exc_info=True)
+
+    def disable_controls(self):
+        """禁用所有控制按钮"""
+        try:
+            self.prev_btn.setEnabled(False)
+            self.next_btn.setEnabled(False)
+            self.start_btn.setEnabled(False)
+            self.timer_control_btn.setEnabled(False)
+            self.reset_timer_btn.setEnabled(False)
+            self.terminate_round_btn.setEnabled(False)
+            logger.debug("所有控制已禁用")
+        except Exception as e:
+            logger.error(f"禁用控制时出错: {e}", exc_info=True)
+
+    def format_time(self, seconds: int) -> str:
+        """格式化时间为MM:SS"""
+        try:
+            mins = seconds // 60
+            secs = seconds % 60
+            return f"{mins:02d}:{secs:02d}"
+        except Exception as e:
+            logger.error(f"格式化时间失败: {e}")
+            return "00:00"
+
+    def update_lcd_display(self, time_seconds, timer_type=None):
+        """更新LCD显示"""
+        try:
+            if timer_type == 'affirmative':
+                # 更新正方计时器显示
+                if hasattr(self, 'aff_timer_lcd'):
+                    self.aff_timer_lcd.display(self.format_time(time_seconds))
+            elif timer_type == 'negative':
+                # 更新反方计时器显示
+                if hasattr(self, 'neg_timer_lcd'):
+                    self.neg_timer_lcd.display(self.format_time(time_seconds))
             else:
-                self.timer_controls_stack.setCurrentIndex(0)
-        else:
-            QMessageBox.warning(self, "提示", "无法开始该环节！")
+                # 更新标准计时器显示 - 这里可以添加标准计时器的LCD显示
+                # 目前标准计时器使用的是按钮文本，不是LCD
+                logger.debug(f"标准计时器时间更新: {self.format_time(time_seconds)}")
+        except Exception as e:
+            logger.error(f"更新LCD显示时出错: {e}", exc_info=True)
 
-    def toggle_timer(self):
-        """开始/暂停计时"""
-        if self.display_board:
-            self.display_board.toggle_timer()
-            # 更新按钮状态
-            if self.display_board.timer_active:
-                self.timer_control_btn.setText("暂停计时")
-                self.timer_control_btn.setIcon(self.style().standardIcon(getattr(QStyle, "SP_MediaPause")))
-                self.status_value.setText("计时中...")
-            else:
-                self.timer_control_btn.setText("继续计时")
-                self.timer_control_btn.setIcon(self.style().standardIcon(getattr(QStyle, "SP_MediaPlay")))
-                self.status_value.setText("计时已暂停")
-
-    def toggle_affirmative_timer(self):
-        """正方计时器控制"""
-        if self.display_board:
-            self.display_board.toggle_affirmative_timer()
-            # 按钮状态将在DisplayBoard中处理
-
-    def toggle_negative_timer(self):
-        """反方计时器控制"""
-        if self.display_board:
-            self.display_board.toggle_negative_timer()
-            # 按钮状态将在DisplayBoard中处理
-
-    def reset_timer(self):
-        """重置计时器"""
-        if self.display_board:
-            self.display_board.reset_timer()
+    def on_round_finished(self):
+        """环节结束时的处理"""
+        try:
+            logger.info("环节已结束")
+            # 重置按钮状态
             self.timer_control_btn.setText("开始计时")
             self.timer_control_btn.setIcon(self.style().standardIcon(getattr(QStyle, "SP_MediaPlay")))
-            self.status_value.setText("计时已重置")
+            self.status_value.setText("环节结束")
             
-            # 重置自由辩论LCD显示
-            if self.is_free_debate and hasattr(self, 'debate_config'):
-                current_round = self.debate_config.get_rounds()[self.rounds_list.currentRow()]
-                half_time = current_round['time'] // 2
-                min_half = half_time // 60
-                sec_half = half_time % 60
-                self.aff_timer_lcd.display(f"{min_half:02d}:{sec_half:02d}")
-                self.neg_timer_lcd.display(f"{min_half:02d}:{sec_half:02d}")
-
-    def terminate_current_round(self):
-        """终止当前回合"""
-        try:
-            if not self.display_board:
-                logger.warning("显示面板未连接，无法终止当前回合")
-                return
+            # 重置自由辩论按钮状态
+            if hasattr(self, 'aff_timer_btn'):
+                self.aff_timer_btn.setText("正方计时")
+                self.aff_timer_btn.setIcon(self.style().standardIcon(getattr(QStyle, "SP_MediaPlay")))
+            
+            if hasattr(self, 'neg_timer_btn'):
+                self.neg_timer_btn.setText("反方计时")
+                self.neg_timer_btn.setIcon(self.style().standardIcon(getattr(QStyle, "SP_MediaPlay")))
+            
+            # 自动切换到下一环节
+            current_index = self.rounds_list.currentRow()
+            if current_index < self.rounds_list.count() - 1:
+                QTimer.singleShot(2000, lambda: self.rounds_list.setCurrentRow(current_index + 1))
                 
-            logger.info("请求终止当前回合")
-            if self.display_board.terminate_current_round():
-                self.status_value.setText("回合已终止")
-                # 更新控制面板状态
-                index = self.rounds_list.currentRow()
-                next_index = index + 1
-                if next_index < self.rounds_list.count():
-                    self.rounds_list.setCurrentRow(next_index)
-                self.roundTerminated.emit()
         except Exception as e:
-            logger.error(f"终止当前回合时出错: {e}", exc_info=True)
+            logger.error(f"处理环节结束时出错: {e}", exc_info=True)
 
-    def keyPressEvent(self, event):
-        """处理键盘事件"""
-        # Enter键 - 开始当前环节
-        if event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter:
-            if self.start_btn.isEnabled():
-                self.start_current_round()
-        # 空格键 - 开始/暂停计时
-        elif event.key() == Qt.Key_Space:
-            if self.timer_control_btn.isEnabled():
-                self.toggle_timer()
-        # Esc键 - 关闭窗口
-        elif event.key() == Qt.Key_Escape:
-            self.close()
-        else:
-            super().keyPressEvent(event)
+    def on_affirmative_timer_finished(self):
+        """正方计时器结束时的处理"""
+        try:
+            logger.info("正方计时器已结束")
+            if hasattr(self, 'aff_timer_btn'):
+                self.aff_timer_btn.setText("时间到")
+                self.aff_timer_btn.setEnabled(False)
+            if hasattr(self, 'aff_timer_lcd'):
+                self.aff_timer_lcd.display("00:00")
+                self.aff_timer_lcd.setStyleSheet("background-color: #FFEDED; color: #D13438; border: none;")
+        except Exception as e:
+            logger.error(f"处理正方计时器结束时出错: {e}", exc_info=True)
+
+    def on_negative_timer_finished(self):
+        """反方计时器结束时的处理"""
+        try:
+            logger.info("反方计时器已结束")
+            if hasattr(self, 'neg_timer_btn'):
+                self.neg_timer_btn.setText("时间到")
+                self.neg_timer_btn.setEnabled(False)
+            if hasattr(self, 'neg_timer_lcd'):
+                self.neg_timer_lcd.display("00:00")
+                self.neg_timer_lcd.setStyleSheet("background-color: #FFEDED; color: #D13438; border: none;")
+        except Exception as e:
+            logger.error(f"处理反方计时器结束时出错: {e}", exc_info=True)
