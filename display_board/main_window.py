@@ -64,6 +64,9 @@ class DisplayBoard(QMainWindow):
             except Exception as e:
                 logger.error(f"无法启用Windows硬件加速: {e}")
 
+        # 添加全屏状态跟踪
+        self.is_fullscreen = False
+
     def _connect_signals(self):
         """连接信号"""
         self.timer_manager.timeUpdated.connect(self._on_timer_updated)
@@ -91,7 +94,12 @@ class DisplayBoard(QMainWindow):
         
         # 创建顶部容器
         topic_container = self.ui_components.create_topic_container()
-        self._setup_topic_stack(topic_container)
+        # 只创建 active_round_widget_top
+        self.active_round_widget_top = self.ui_components.create_active_round_widget_top()
+        topic_layout = QVBoxLayout(topic_container)
+        topic_layout.setContentsMargins(0, 0, 0, 0)
+        topic_layout.setSpacing(0)
+        topic_layout.addWidget(self.active_round_widget_top)
         main_layout.addWidget(topic_container, 10)
         
         # 创建左右两侧布局
@@ -119,36 +127,6 @@ class DisplayBoard(QMainWindow):
         
         self.bg_label.lower()
 
-    def _setup_topic_stack(self, topic_container):
-        """设置顶部堆栈布局"""
-        self.topic_stack = QStackedLayout(topic_container)
-        
-        # 创建预览和活动控件
-        self.preview_widget_top = self.ui_components.create_preview_widget_top()
-        self.active_round_widget_top = self.ui_components.create_active_round_widget_top()
-        
-        # 移除所有阴影效果
-        self._remove_shadow_from_widget(self.preview_widget_top)
-        self._remove_shadow_from_widget(self.active_round_widget_top)
-        
-        self.topic_stack.addWidget(self.preview_widget_top)
-        self.topic_stack.addWidget(self.active_round_widget_top)
-        self.topic_stack.setCurrentWidget(self.preview_widget_top)
-        
-    def _remove_shadow_from_widget(self, widget):
-        """递归移除控件及其子控件的阴影效果"""
-        if not widget:
-            return
-            
-        # 移除当前控件的阴影效果
-        if isinstance(widget.graphicsEffect(), QGraphicsDropShadowEffect):
-            widget.setGraphicsEffect(None)
-            
-        # 递归处理所有子控件
-        for child in widget.findChildren(QWidget):
-            if isinstance(child.graphicsEffect(), QGraphicsDropShadowEffect):
-                child.setGraphicsEffect(None)
-                
     def _create_sides_layout(self):
         """创建左右两侧布局"""
         sides_layout = QHBoxLayout()
@@ -192,6 +170,17 @@ class DisplayBoard(QMainWindow):
             timer_state = self.timer_manager.get_timer_state()
             self.content_updater.update_timer_display(self.active_round_widget_top, timer_state)
             
+            # 新增：强制更新进度条所在的父容器
+            if hasattr(self.active_round_widget_top, 'timer_containers'):
+                if timer_state['is_free_debate']:
+                    container = self.active_round_widget_top.timer_containers['free_debate']
+                    container.update()
+                    container.repaint()
+                else:
+                    container = self.active_round_widget_top.timer_containers['standard']
+                    container.update()
+                    container.repaint()
+            
             # 更新控制面板显示
             if self.control_panel and hasattr(self.control_panel, 'update_lcd_display'):
                 if timer_state['is_free_debate']:
@@ -217,22 +206,16 @@ class DisplayBoard(QMainWindow):
             }
             self.content_updater.highlight_active_debater(side_widgets, None)
             
-            # 更新预览内容
+            # 更新内容（直接更新 active_round_widget_top）
             if next_round_idx < len(self.rounds):
                 round_data = self.rounds[next_round_idx]
             else:
                 round_data = self.rounds[self.current_round_index] if self.current_round_index >= 0 else None
                 
-            self.content_updater.update_preview_content(
-                self.preview_widget_top, round_data, next_round_idx
+            self.content_updater.update_active_content(
+                self.active_round_widget_top, round_data
             )
-            
-            # 切换到预览模式
-            self.animation_manager.animate_widget_transition(
-                self.active_round_widget_top, 
-                self.preview_widget_top, 
-                self.topic_stack
-            )
+            # 不再切换渲染层
             
             # 更新控制面板状态
             if self.control_panel and hasattr(self.control_panel, 'on_round_finished'):
@@ -306,10 +289,9 @@ class DisplayBoard(QMainWindow):
             # 设置辩论环节
             if 'rounds' in config and isinstance(config['rounds'], list):
                 self.rounds = config['rounds']
-                self.content_updater.update_preview_content(
-                    self.preview_widget_top, 
-                    self.rounds[0] if self.rounds else None, 
-                    0
+                self.content_updater.update_active_content(
+                    self.active_round_widget_top, 
+                    self.rounds[0] if self.rounds else None
                 )
                 
         except Exception as e:
@@ -327,8 +309,15 @@ class DisplayBoard(QMainWindow):
                 widget.school_label.repaint()
             
             if 'viewpoint' in data and data['viewpoint']:
-                setattr(self, f"{side}_viewpoint", str(data['viewpoint']))
-                widget.viewpoint_label.setText(str(data['viewpoint']))
+                viewpoint_text = str(data['viewpoint'])
+                # 使用highlight_markers处理富文本，并指定side
+                from utils import highlight_markers
+                rich_text = highlight_markers(viewpoint_text, side=side)
+                setattr(self, f"{side}_viewpoint", viewpoint_text)  # 存储原始文本
+                
+                # 设置富文本格式
+                widget.viewpoint_label.setTextFormat(Qt.RichText)
+                widget.viewpoint_label.setText(rich_text)
                 widget.viewpoint_label.update()
                 widget.viewpoint_label.repaint()
                 
@@ -363,21 +352,15 @@ class DisplayBoard(QMainWindow):
             }
             self.content_updater.highlight_active_debater(side_widgets, None)
             
-            # 切换到预览模式
+            # 直接更新 active_round_widget_top
             next_idx = self.current_round_index + 1
             if next_idx < len(self.rounds):
                 round_data = self.rounds[next_idx]
             else:
                 round_data = self.rounds[self.current_round_index] if self.current_round_index >= 0 else None
                 
-            self.content_updater.update_preview_content(
-                self.preview_widget_top, round_data, next_idx
-            )
-            
-            self.animation_manager.animate_widget_transition(
-                self.active_round_widget_top, 
-                self.preview_widget_top, 
-                self.topic_stack
+            self.content_updater.update_active_content(
+                self.active_round_widget_top, round_data
             )
         return success
 
@@ -401,12 +384,16 @@ class DisplayBoard(QMainWindow):
             # 保存当前环节信息到活动控件中，供计时器使用
             self.active_round_widget_top.current_round = self.current_round
             
-            # 切换到活动视图
-            self.animation_manager.animate_widget_transition(
-                self.preview_widget_top, 
-                self.active_round_widget_top, 
-                self.topic_stack
-            )
+            # 检查是否为最后一个环节，如果是则隐藏下一环节信息
+            if hasattr(self.active_round_widget_top, 'next_round_frame'):
+                if index >= len(self.rounds) - 1:
+                    self.active_round_widget_top.next_round_frame.setVisible(False)
+                else:
+                    next_round = self.rounds[index + 1]
+                    next_round_info = next_round.get('description', "下一环节")
+                    if hasattr(self.active_round_widget_top.next_round_frame, 'next_round_info'):
+                        self.active_round_widget_top.next_round_frame.next_round_info.setText(next_round_info)
+                    self.active_round_widget_top.next_round_frame.setVisible(True)
             
             # 高亮当前环节的活跃辩手
             side_widgets = {
@@ -455,56 +442,95 @@ class DisplayBoard(QMainWindow):
             if hasattr(control_panel, 'roundSelected'):
                 control_panel.roundSelected.connect(self.onRoundSelected)
                 
-                # 如果控制面板已经加载了环节数据，更新预览内容
+                # 如果控制面板已经加载了环节数据，更新内容
                 if hasattr(control_panel, 'rounds_list') and control_panel.rounds_list.count() > 0:
-                    self.content_updater.update_preview_content(
-                        self.preview_widget_top,
-                        self.rounds[0] if self.rounds else None,
-                        0
+                    self.content_updater.update_active_content(
+                        self.active_round_widget_top,
+                        self.rounds[0] if self.rounds else None
                     )
             
         except Exception as e:
             logger.error(f"设置控制面板引用时出错: {e}", exc_info=True)
 
     def onRoundSelected(self, index):
-        """响应控制端环节选择，更新预览视图或当前环节"""
+        """响应控制端环节选择，更新视图或当前环节"""
         logger.info(f"收到环节选择信号: index={index}")
         try:
-            # 更新预览内容
+            # 更新内容
             round_data = self.rounds[index] if 0 <= index < len(self.rounds) else None
-            self.content_updater.update_preview_content(
-                self.preview_widget_top, round_data, index
+            self.content_updater.update_active_content(
+                self.active_round_widget_top, round_data
             )
-            
-            # 如果不是在计时中，则可以直接切换到预览模式
-            timer_state = self.timer_manager.get_timer_state()
-            if not timer_state['timer_active']:
-                self.topic_stack.setCurrentWidget(self.preview_widget_top)
-                
+            # 不再切换渲染层
         except Exception as e:
             logger.error(f"处理环节选择时出错: {e}", exc_info=True)
-
-    # 数据重置方法
-    def _reset_all_data(self):
-        """重置所有数据"""
-        try:
-            self.current_round = None
-            self.current_round_index = -1
-            self.timer_manager.reset_timer(0)
-            
-        except Exception as e:
-            logger.error(f"重置数据时出错: {e}", exc_info=True)
 
     def _set_preview_default_content(self):
         """设置预览默认内容"""
         try:
-            if hasattr(self.preview_widget_top, 'title_label'):
-                self.preview_widget_top.title_label.setText("准备中...")
-            if hasattr(self.preview_widget_top, 'type_label'):
-                self.preview_widget_top.type_label.setText("N/A")
-            if hasattr(self.preview_widget_top, 'desc_label'):
-                self.preview_widget_top.desc_label.setText("N/A")
-            if hasattr(self.preview_widget_top, 'time_label'):
-                self.preview_widget_top.time_label.setText("N/A")
+            # 兼容性保留，实际无用
+            pass
         except Exception as e:
             logger.error(f"设置预览默认内容时出错: {e}", exc_info=True)
+
+    # 确保这些方法保留在主窗口代码中
+    def keyPressEvent(self, event):
+        """处理键盘事件"""
+        try:
+            # 处理F11键 - 切换全屏
+            if event.key() == Qt.Key_F11:
+                self.toggle_fullscreen()
+                
+            # 处理ESC键 - 退出全屏
+            elif event.key() == Qt.Key_Escape and self.is_fullscreen:
+                self.exit_fullscreen()
+            
+            # 将未处理的事件传递给父类
+            super().keyPressEvent(event)
+            
+        except Exception as e:
+            logger.error(f"处理键盘事件时出错: {e}", exc_info=True)
+
+    def toggle_fullscreen(self):
+        """切换全屏状态"""
+        try:
+            if self.is_fullscreen:
+                self.exit_fullscreen()
+            else:
+                self.enter_fullscreen()
+                
+        except Exception as e:
+            logger.error(f"切换全屏状态时出错: {e}", exc_info=True)
+
+    def enter_fullscreen(self):
+        """进入全屏模式"""
+        try:
+            # 保存当前窗口状态
+            self.previous_window_state = self.windowState()
+            
+            # 设置全屏标志
+            self.is_fullscreen = True
+            
+            # 切换到全屏模式
+            self.showFullScreen()
+            logger.info("已进入全屏模式")
+            
+        except Exception as e:
+            logger.error(f"进入全屏模式时出错: {e}", exc_info=True)
+
+    def exit_fullscreen(self):
+        """退出全屏模式"""
+        try:
+            # 恢复之前的窗口状态
+            if hasattr(self, 'previous_window_state'):
+                self.setWindowState(self.previous_window_state)
+            else:
+                # 如果没有保存的状态，则恢复到正常窗口
+                self.showNormal()
+            
+            # 清除全屏标志
+            self.is_fullscreen = False
+            logger.info("已退出全屏模式")
+            
+        except Exception as e:
+            logger.error(f"退出全屏模式时出错: {e}", exc_info=True)

@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QProgressBar, QWidget, QGraphicsOpacityEffect, QLabel
+from PyQt5.QtWidgets import QProgressBar, QWidget, QGraphicsOpacityEffect, QLabel, QMainWindow
 from PyQt5.QtCore import Qt, QRectF, QPropertyAnimation, QEasingCurve, pyqtProperty, QPoint, QPointF
 from PyQt5.QtGui import QPainter, QColor, QFontMetrics, QPen, QBrush, QPainterPath, QConicalGradient
 import logging
@@ -11,16 +11,16 @@ class CircularProgressBar(QProgressBar):
     def __init__(self, parent=None):
         super().__init__(parent)
         # 默认样式设置
-        self.line_width = 8               # 增加环形宽度
-        self.background_color = Qt.transparent
-        self.progress_color = "#0078D4"
-        self.text_color = Qt.black
-        self.radius = 50                  # 增加环形半径
+        self.line_width = 6               # 环形宽度
+        self.background_color = Qt.transparent   # 设置背景为透明
+        self.progress_color = "#0078D4"    # 进度环颜色
+        self.text_color = Qt.black        # 文字颜色
+        self.radius = 40                  # 环形半径
         self._value = 0
-        self._maximum = 100
+        self._maximum = 100               # 添加最大值属性
         
-        # 增加固定尺寸
-        self.setFixedSize(150, 150)  # 从120x120增加到150x150
+        # 固定尺寸 - 增加尺寸确保能完整显示
+        self.setFixedSize(120, 120)  # 增加尺寸
         
         # 关闭默认样式，确保完全透明
         self.setTextVisible(False)  # 关闭默认文本显示
@@ -143,7 +143,7 @@ class CircularProgressBar(QProgressBar):
         
         font = painter.font()
         font.setBold(True)
-        font.setPointSize(14)  # 增加字体大小，从10到14
+        font.setPointSize(10)  # 设置合适的字体大小
         painter.setFont(font)
         fm = painter.fontMetrics()
         text_rect = fm.boundingRect(text)
@@ -161,8 +161,9 @@ class RoundedProgressBar(CircularProgressBar):
         super().__init__(parent)
         # 设置为完全透明背景
         self.setAttribute(Qt.WA_TranslucentBackground, True)
-        self.setRadius(45)  # 增加半径，从35到45
-        self.setLineWidth(8)  # 增加线宽，从6到8
+        # 删除位置调整，让布局管理器控制
+        self.setRadius(35)  # 增大尺寸
+        self.setLineWidth(6)  # 确保线宽合适
         
     def setFormat(self, fmt):
         # 重写文字显示逻辑
@@ -352,5 +353,262 @@ class DynamicIslandManager:
         # 实现进度条绘制逻辑
         pass
 
-# 使用示例
-# 创建 DynamicIslandManager 实例，并在每个回合调用 start_round()。# 使用示例# 创建 DynamicIslandManager 实例，并在每个回合调用 start_round()。
+class ControlPanel(QMainWindow):
+    """控制面板主窗口"""
+    
+    def __init__(self, display_board=None):
+        super().__init__()
+        # 初始化参数
+        self.display_board = display_board
+        self.rounds = []  # 存储回合信息的列表
+        self.round_in_progress = False  # 回合进行中标志
+        
+        # 设置窗口标题
+        self.setWindowTitle("辩论计时器 - 控制面板")
+        
+        # 初始化UI
+        self.init_ui()
+        
+    def init_ui(self):
+        """初始化用户界面"""
+        # 设置窗口大小
+        self.resize(800, 600)
+        
+        # 禁用窗口最大化
+        self.setFixedSize(self.size())
+        
+        # 中心区域 - 用于放置主要控件
+        central_widget = QWidget(self)
+        self.setCentralWidget(central_widget)
+        
+        # 布局管理
+        from PyQt5.QtWidgets import QVBoxLayout
+        layout = QVBoxLayout(central_widget)
+        
+        # 添加其他控件和布局
+        # ... 这里是其他控件的初始化代码 ...
+        
+        # 初始化完成后，加载默认的回合设置
+        self.load_default_rounds()
+        
+    def load_default_rounds(self):
+        """加载默认的回合设置"""
+        self.rounds = [
+            {"description": "第一回合", "type": "自由辩论"},
+            {"description": "第二回合", "type": "提问环节"},
+            {"description": "第三回合", "type": "总结发言"},
+        ]
+        
+        # 更新UI以显示加载的回合
+        self.update_rounds_list()
+        
+    def update_rounds_list(self):
+        """更新回合列表显示"""
+        try:
+            if not self.rounds_list:
+                return
+            
+            # 清空现有项
+            self.rounds_list.clear()
+            
+            # 添加回合描述
+            for round_info in self.rounds:
+                self.rounds_list.addItem(round_info.get("description", "未知回合"))
+                
+            # 自动选择第一项
+            if self.rounds_list.count() > 0:
+                self.rounds_list.setCurrentRow(0)
+                
+        except Exception as e:
+            logger.error(f"更新回合列表时出错: {e}", exc_info=True)
+    
+    def start_round(self):
+        """开始当前选择的环节"""
+        try:
+            if not self.display_board:
+                self.show_error_message("未连接展示窗口")
+                return
+                
+            # 获取当前选择的环节索引
+            index = self.rounds_list.currentRow()
+            if index < 0:
+                self.show_error_message("请先选择一个环节")
+                return
+                
+            # 设置回合进行中标志
+            self.round_in_progress = True
+            
+            # 禁用左侧环节选择栏
+            self.rounds_list.setEnabled(False)
+            
+            # 修改开始按钮状态
+            self.start_button.setText("环节进行中...")
+            self.start_button.setEnabled(False)
+            
+            # 启用结束按钮
+            self.end_button.setEnabled(True)
+            
+            # 启动计时器
+            success = self.display_board.start_round(index)
+            if success:
+                # 启用暂停和重置按钮
+                self.toggle_button.setEnabled(True)
+                self.reset_button.setEnabled(True)
+                
+                # 显示回合信息
+                round_data = self.rounds[index]
+                self.show_status_message(f"环节 {index+1} 已开始: {round_data.get('description', '')}")
+                
+                # 根据环节类型启用相应按钮
+                is_free_debate = round_data.get('type') == "自由辩论"
+                self.toggle_affirmative_button.setEnabled(is_free_debate)
+                self.toggle_negative_button.setEnabled(is_free_debate)
+                
+            else:
+                self.show_error_message("无法启动环节")
+                
+                # 恢复状态
+                self.round_in_progress = False
+                self.rounds_list.setEnabled(True)
+                self.start_button.setText("开始环节")
+                self.start_button.setEnabled(True)
+                self.end_button.setEnabled(False)
+                
+        except Exception as e:
+            logger.error(f"开始环节时出错: {e}", exc_info=True)
+            self.show_error_message(f"开始环节时出错: {str(e)}")
+    
+    def end_round(self):
+        """结束当前环节"""
+        try:
+            if not self.display_board:
+                self.show_error_message("未连接展示窗口")
+                return
+                
+            # 强制终止当前环节
+            success = self.display_board.terminate_current_round()
+            
+            # 恢复界面状态
+            self.round_in_progress = False
+            self.rounds_list.setEnabled(True)
+            self.start_button.setText("开始环节")
+            self.start_button.setEnabled(True)
+            self.end_button.setEnabled(False)
+            
+            # 禁用计时器控制按钮
+            self.toggle_button.setEnabled(False)
+            self.reset_button.setEnabled(False)
+            self.toggle_affirmative_button.setEnabled(False)
+            self.toggle_negative_button.setEnabled(False)
+            
+            # 重置LCD显示
+            self.reset_lcd_display()
+            
+            if success:
+                self.show_status_message("环节已结束")
+            else:
+                self.show_error_message("无法结束环节")
+                
+        except Exception as e:
+            logger.error(f"结束环节时出错: {e}", exc_info=True)
+            self.show_error_message(f"结束环节时出错: {str(e)}")
+    
+    def on_round_finished(self):
+        """当计时器自然结束时调用"""
+        try:
+            # 恢复界面状态
+            self.round_in_progress = False
+            self.rounds_list.setEnabled(True)
+            self.start_button.setText("开始环节")
+            self.start_button.setEnabled(True)
+            self.end_button.setEnabled(False)
+            
+            # 禁用计时器控制按钮
+            self.toggle_button.setEnabled(False)
+            self.reset_button.setEnabled(False)
+            self.toggle_affirmative_button.setEnabled(False)
+            self.toggle_negative_button.setEnabled(False)
+            
+            # 显示结束消息
+            self.show_status_message("环节计时结束")
+            
+            # 自动选择下一个环节
+            current_row = self.rounds_list.currentRow()
+            if current_row < self.rounds_list.count() - 1:
+                self.rounds_list.setCurrentRow(current_row + 1)
+                
+        except Exception as e:
+            logger.error(f"处理环节结束事件时出错: {e}", exc_info=True)
+    
+    def on_round_selection_changed(self):
+        """当环节选择改变时调用"""
+        try:
+            # 只有在非进行中状态才处理选择变更
+            if not self.round_in_progress:
+                current_row = self.rounds_list.currentRow()
+                if current_row >= 0:
+                    # 发送信号给展示窗口预览选择的环节
+                    self.roundSelected.emit(current_row)
+                    
+                    # 更新当前选择的环节信息
+                    round_data = self.rounds[current_row]
+                    description = round_data.get('description', '')
+                    is_free_debate = round_data.get('type') == "自由辩论"
+                    
+                    self.show_status_message(f"已选择回合 {current_row+1}: {description}")
+                    logger.info(f"已选择回合 {current_row+1}: {description}")
+                    
+                    # 在环节更改时重置计时器
+                    if hasattr(self, 'display_board') and self.display_board:
+                        # 重置 LCD 显示
+                        self.reset_lcd_display()
+                        
+                        # 重置计时器
+                        self.display_board.reset_timer()
+            
+        except Exception as e:
+            logger.error(f"处理环节选择变更时出错: {e}", exc_info=True)
+    
+    def next_round(self):
+        """切换到下一个环节"""
+        try:
+            current_row = self.rounds_list.currentRow()
+            if current_row < self.rounds_list.count() - 1:
+                # 结束当前环节
+                self.end_round()
+                
+                # 选择下一个环节
+                self.rounds_list.setCurrentRow(current_row + 1)
+                
+                # 自动开始下一个环节
+                self.start_round()
+            else:
+                self.show_status_message("已经是最后一个环节")
+                
+        except Exception as e:
+            logger.error(f"切换到下一个环节时出错: {e}", exc_info=True)
+    
+    def prev_round(self):
+        """切换到上一个环节"""
+        try:
+            current_row = self.rounds_list.currentRow()
+            if current_row > 0:
+                # 结束当前环节
+                self.end_round()
+                
+                # 选择上一个环节
+                self.rounds_list.setCurrentRow(current_row - 1)
+                
+                # 自动开始上一个环节
+                self.start_round()
+            else:
+                self.show_status_message("已经是第一个环节")
+                
+        except Exception as e:
+            logger.error(f"切换到上一个环节时出错: {e}", exc_info=True)
+    
+    def reset_lcd_display(self):
+        """重置LCD显示"""
+        self.lcd_display.display("00:00")
+        self.affirmative_lcd.display("00:00")
+        self.negative_lcd.display("00:00")

@@ -37,56 +37,6 @@ class UIComponents:
         
         return topic_container
     
-    def create_preview_widget_top(self):
-        """创建预览灵动岛控件"""
-        logger.debug("创建预览灵动岛控件")
-        
-        preview_widget = QWidget()
-        layout = QHBoxLayout(preview_widget)
-        layout.setAlignment(Qt.AlignCenter)
-        layout.setContentsMargins(20, 10, 20, 10)
-        layout.setSpacing(15)
-
-        # 创建标签
-        preview_title_label = QLabel("下一环节:")
-        preview_title_label.setFont(QFont("微软雅黑", 18, QFont.Bold))
-        preview_title_label.setAlignment(Qt.AlignCenter)
-        self._optimize_label_rendering(preview_title_label, "#323130")
-
-        preview_type_label = QLabel("类型: N/A")
-        preview_type_label.setFont(QFont("微软雅黑", 22, QFont.Bold))
-        preview_type_label.setAlignment(Qt.AlignCenter)
-        self._optimize_label_rendering(preview_type_label, "#0078D4")
-
-        preview_desc_label = QLabel("描述: N/A")
-        preview_desc_label.setFont(QFont("微软雅黑", 16))
-        preview_desc_label.setAlignment(Qt.AlignCenter)
-        preview_desc_label.setWordWrap(False)
-        self._optimize_label_rendering(preview_desc_label, "#605E5C")
-        
-        preview_time_label = QLabel("时长: N/A")
-        preview_time_label.setFont(QFont("微软雅黑", 16))
-        preview_time_label.setAlignment(Qt.AlignCenter)
-        self._optimize_label_rendering(preview_time_label, "#605E5C")
-
-        layout.addWidget(preview_title_label)
-        layout.addWidget(preview_type_label)
-        layout.addWidget(preview_desc_label)
-        layout.addWidget(preview_time_label)
-        
-        # 添加透明度效果
-        opacity_effect = QGraphicsOpacityEffect(preview_widget)
-        opacity_effect.setOpacity(1.0)
-        preview_widget.setGraphicsEffect(opacity_effect)
-        
-        # 保存标签引用
-        preview_widget.title_label = preview_title_label
-        preview_widget.type_label = preview_type_label
-        preview_widget.desc_label = preview_desc_label
-        preview_widget.time_label = preview_time_label
-        
-        return preview_widget
-    
     def create_active_round_widget_top(self):
         """创建倒计时灵动岛控件"""
         logger.debug("创建倒计时灵动岛控件")
@@ -146,24 +96,29 @@ class UIComponents:
         # 标准计时器容器
         standard_container = QWidget()
         timer_layout = QHBoxLayout(standard_container)
-        timer_layout.setContentsMargins(0, 0, 0, 0)
-        timer_layout.setSpacing(10)
+        # 调整容器边距
+        timer_layout.setContentsMargins(0, 0, 0, 60)
+        timer_layout.setSpacing(20)  # 增加组件间距
         timer_layout.setAlignment(Qt.AlignCenter)
         
+        # 增加容器的最小高度
+        standard_container.setMinimumHeight(180)  # 从120增加到180
         standard_container.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         
-        # 创建环形进度条
-        size = 80
+        # 创建更大的环形进度条
+        size = 120  # 从80增加到120
         progress_bar = RoundedProgressBar()
         progress_bar.setFixedSize(size, size)
-        progress_bar.setLineWidth(4)
+        progress_bar.setLineWidth(8)  # 增加线宽
         progress_bar.setProgressColor(QColor("#0078D4"))
         progress_bar.setTextColor(QColor("#323130"))
         
+        # 增大倒计时标签
         countdown_label = QLabel()
-        countdown_label.setFont(QFont("微软雅黑", 24, QFont.Bold))
+        countdown_label.setFont(QFont("微软雅黑", 36, QFont.Bold))  # 从24增加到36
         countdown_label.setAlignment(Qt.AlignCenter)
         countdown_label.setStyleSheet("color: #323130;")
+        countdown_label.setMinimumWidth(120)  # 确保标签有足够宽度
         
         timer_layout.addWidget(progress_bar)
         timer_layout.addWidget(countdown_label)
@@ -183,13 +138,17 @@ class UIComponents:
         """创建自由辩论双计时器"""
         container = QWidget()
         layout = QHBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(10)
+        # 进一步增加边距和容器大小
+        layout.setContentsMargins(15, 15, 15, 70)
+        layout.setSpacing(30)  # 增加组件间距
         layout.setAlignment(Qt.AlignCenter)
         
-        # 正方计时器组
-        aff_group = self._create_timer_group("正方", "#0078D4", size)
-        neg_group = self._create_timer_group("反方", "#C42B1C", size)
+        # 增加容器的最小高度
+        container.setMinimumHeight(180)  # 更大的最小高度
+        
+        # 正方计时器组 - 使用更大的进度条
+        aff_group = self._create_timer_group("正方", "#0078D4", size+20)  # 增加进度条尺寸
+        neg_group = self._create_timer_group("反方", "#C42B1C", size+20)  # 增加进度条尺寸
         
         layout.addWidget(aff_group)
         layout.addWidget(neg_group)
@@ -203,34 +162,36 @@ class UIComponents:
         """创建单个计时器组"""
         group = QWidget()
         group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        # 增加计时器组的高度
+        group.setMinimumHeight(150)
+        group.setMaximumHeight(200)  # 增加最大高度
+        
+        # 使用更简化的布局 - 去除嵌套
         layout = QVBoxLayout(group)
+        layout.setContentsMargins(5, 5, 5, 40)  # 增加底部边距
+        layout.setSpacing(10)
         
         # 标题
         title_label = QLabel(title)
         title_label.setAlignment(Qt.AlignCenter)
         title_label.setFont(QFont("微软雅黑", 12, QFont.Bold))
         title_label.setStyleSheet(f"color: {color};")
+        layout.addWidget(title_label)
         
-        # 计时器布局
-        timer_box = QHBoxLayout()
-        
-        # 进度条
+        # 进度条 - 独立添加到布局
         progress_bar = RoundedProgressBar()
-        progress_bar.setFixedSize(size, size)
-        progress_bar.setLineWidth(4)
+        progress_bar.setFixedSize(size, size)  # 设置更大尺寸
+        progress_bar.setLineWidth(5)  # 增加线宽
         progress_bar.setProgressColor(QColor(color))
         progress_bar.setTextColor(QColor("#323130"))
+        layout.addWidget(progress_bar, 0, Qt.AlignCenter)  # 居中对齐
         
         # 倒计时标签
         countdown_label = QLabel()
         countdown_label.setFont(QFont("微软雅黑", 20, QFont.Bold))
         countdown_label.setAlignment(Qt.AlignCenter)
         countdown_label.setStyleSheet("color: #323130;")
-        
-        timer_box.addWidget(progress_bar)
-        timer_box.addWidget(countdown_label)
-        layout.addWidget(title_label)
-        layout.addLayout(timer_box)
+        layout.addWidget(countdown_label)
         
         # 保存组件引用
         group.progress_bar = progress_bar
@@ -348,9 +309,13 @@ class UIComponents:
             border: 2px solid rgba({rgb}, 0.3);
         """)
         
+        # 设置最大高度，减少容器高度
+        frame.setMaximumHeight(240)
+        
         layout = QVBoxLayout(frame)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(10)
+        # 减少内边距，尤其是上下间距
+        layout.setContentsMargins(10, 5, 10, 5)
+        layout.setSpacing(5)  # 减少控件间距
         
         # 标题
         title = QLabel("辩手阵容")
@@ -361,8 +326,8 @@ class UIComponents:
         
         # 辩手网格
         grid = QGridLayout()
-        grid.setSpacing(15)
-        grid.setVerticalSpacing(20)
+        grid.setSpacing(10)  # 减少网格间距
+        grid.setVerticalSpacing(15)  # 减少垂直间距
         
         # 创建辩手标签
         debater_labels = {}

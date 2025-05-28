@@ -42,9 +42,24 @@ if not logger.handlers:
     logger.addHandler(console_handler)
     logger.addHandler(file_handler)
 
-def highlight_markers(text, hl_color):
-    """用指定颜色高亮文本中的 **标记内容**，并将整个文本加粗"""
+def highlight_markers(text, hl_color=None, side=None):
+    """用指定颜色高亮文本中的 **标记内容**，并将整个文本加粗
+    
+    Args:
+        text: 要处理的文本
+        hl_color: 高亮颜色，如果提供则优先使用
+        side: 辩论方，'affirmative'或'negative'
+    """
     try:
+        # 如果没有提供颜色，则根据辩论方决定
+        if hl_color is None:
+            if side == 'affirmative':
+                hl_color = "#177cb0"  # 正方蓝色
+            elif side == 'negative':
+                hl_color = "#ff3300"  # 反方红色
+            else:
+                hl_color = "#000000"  # 默认黑色
+        
         # 先进行HTML转义，防止XSS攻击
         text = escape(text)
         

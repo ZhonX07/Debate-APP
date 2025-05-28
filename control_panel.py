@@ -13,6 +13,9 @@ import os
 import logging
 from typing import Dict, Any, Optional
 
+# 新增：导入 markdown 库
+import markdown
+
 # 导入自定义模块
 from utils import logger
 from config_manager import DebateConfig, ConfigValidationError
@@ -32,6 +35,7 @@ class ControlPanel(QMainWindow):
         self.current_config_file = ""
         self.debate_config = None
         self.is_free_debate = False  # 标记当前是否为自由辩论回合
+        self.round_in_progress = False  # 添加回合进行中的标志
         
         self.setStyleSheet("""
             QMainWindow { background-color: #F5F5F5; }
@@ -405,6 +409,12 @@ class ControlPanel(QMainWindow):
                 QMessageBox.critical(self, "错误", "无效的时间设置")
                 return
 
+            # 设置回合进行中标志
+            self.round_in_progress = True
+            
+            # 禁用左侧环节选择栏
+            self.rounds_list.setEnabled(False)
+            
             # 更新显示板 - 传递索引而不是字典
             self.display_board.start_round(current_index)
             self.status_value.setText("进行中")
@@ -479,14 +489,8 @@ class ControlPanel(QMainWindow):
             else:
                 # 启动/恢复计时器
                 started = False
-                if hasattr(self, 'current_round_time') and self.current_round_time > 0:
-                    # 如果有当前回合时间，先设置时间再启动
-                    timer_manager.set_duration(self.current_round_time)
-                    started = timer_manager.start()
-                else:
-                    # 否则尝试恢复
-                    started = timer_manager.resume()
-                
+                # 修复：恢复时不再设置 duration，避免重置
+                started = timer_manager.resume()
                 if started:
                     logger.debug("已启动/恢复计时器")
                     self.timer_control_btn.setText("暂停计时")
@@ -541,6 +545,13 @@ class ControlPanel(QMainWindow):
                 logger.info("当前环节已终止")
                 self.roundTerminated.emit()
                 self.status_value.setText("已终止")
+                
+                # 重置回合进行中标志
+                self.round_in_progress = False
+                
+                # 重新启用左侧环节选择栏
+                self.rounds_list.setEnabled(True)
+                
                 QMessageBox.information(self, "提示", "环节已强制终止")
             else:
                 logger.error("终止环节失败")
@@ -611,6 +622,11 @@ class ControlPanel(QMainWindow):
         try:
             logger.debug(f"选择回合索引: {index}")
             
+            # 只有在非回合进行中状态才处理选择
+            if self.round_in_progress:
+                logger.info("回合进行中，忽略环节选择")
+                return
+                
             if index < 0:
                 logger.debug("索引小于0，清空显示")
                 self._set_default_round_display()
@@ -655,10 +671,14 @@ class ControlPanel(QMainWindow):
             
             time_min = int(time_value) // 60
             time_sec = int(time_value) % 60
-            
-            # 安全更新标签内容
+
+            # 新增：支持 Markdown 富文本
             if hasattr(self, 'current_round_label') and self.current_round_label:
-                self.current_round_label.setText(f"{side_text} {round_info['speaker']} - {round_info['type']}")
+                # 允许 speaker 字段为 Markdown
+                md_text = f"{side_text} {round_info['speaker']} - {round_info['type']}"
+                html = markdown.markdown(md_text)
+                self.current_round_label.setTextFormat(Qt.RichText)
+                self.current_round_label.setText(html)
             
             if hasattr(self, 'current_time_label') and self.current_time_label:
                 self.current_time_label.setText(f"时长: {time_min}分{time_sec}秒")
@@ -678,6 +698,11 @@ class ControlPanel(QMainWindow):
                 if hasattr(self, 'neg_timer_lcd'):
                     self.neg_timer_lcd.display(self.format_time(half_time))
             
+            # 在环节变更时重置计时器
+            if self.display_board and hasattr(self.display_board, 'reset_timer'):
+                self.display_board.reset_timer()
+                logger.debug("环节变更，计时器已重置")
+            
             # 发送环节选择信号
             self.roundSelected.emit(index)
             logger.info(f"已选择回合 {index+1}: {side_text} {round_info['speaker']} - {round_info['type']}")
@@ -690,6 +715,7 @@ class ControlPanel(QMainWindow):
         """设置默认的环节显示内容"""
         try:
             if hasattr(self, 'current_round_label') and self.current_round_label:
+                self.current_round_label.setTextFormat(Qt.PlainText)
                 self.current_round_label.setText("未选择环节")
             if hasattr(self, 'current_time_label') and self.current_time_label:
                 self.current_time_label.setText("时长: 0分钟")
@@ -701,7 +727,17 @@ class ControlPanel(QMainWindow):
         try:
             current_index = self.rounds_list.currentRow()
             if current_index > 0:
+                # 如果当前有回合在进行中，先结束
+                if self.round_in_progress:
+                    self.terminate_current_round()
+                
+                # 选择上一个环节
                 self.rounds_list.setCurrentRow(current_index - 1)
+                
+                # 自动开始新环节
+                self.start_current_round()
+            else:
+                self.status_value.setText("已经是第一个环节")
         except Exception as e:
             logger.error(f"切换到上一环节时出错: {e}", exc_info=True)
 
@@ -710,7 +746,17 @@ class ControlPanel(QMainWindow):
         try:
             current_index = self.rounds_list.currentRow()
             if current_index < self.rounds_list.count() - 1:
+                # 如果当前有回合在进行中，先结束
+                if self.round_in_progress:
+                    self.terminate_current_round()
+                
+                # 选择下一个环节
                 self.rounds_list.setCurrentRow(current_index + 1)
+                
+                # 自动开始新环节
+                self.start_current_round()
+            else:
+                self.status_value.setText("已经是最后一个环节")
         except Exception as e:
             logger.error(f"切换到下一环节时出错: {e}", exc_info=True)
 
@@ -777,14 +823,11 @@ class ControlPanel(QMainWindow):
             self.timer_control_btn.setIcon(self.style().standardIcon(getattr(QStyle, "SP_MediaPlay")))
             self.status_value.setText("环节结束")
             
-            # 重置自由辩论按钮状态
-            if hasattr(self, 'aff_timer_btn'):
-                self.aff_timer_btn.setText("正方计时")
-                self.aff_timer_btn.setIcon(self.style().standardIcon(getattr(QStyle, "SP_MediaPlay")))
+            # 重置回合进行中标志
+            self.round_in_progress = False
             
-            if hasattr(self, 'neg_timer_btn'):
-                self.neg_timer_btn.setText("反方计时")
-                self.neg_timer_btn.setIcon(self.style().standardIcon(getattr(QStyle, "SP_MediaPlay")))
+            # 重新启用左侧环节选择栏
+            self.rounds_list.setEnabled(True)
             
             # 自动切换到下一环节
             current_index = self.rounds_list.currentRow()

@@ -1,3 +1,8 @@
 # 辩论赛计时系统依赖
 PyQt5>=5.15.2
+PyQt5-stubs>=5.15.2.0
 pywin32>=300 ; sys_platform == 'win32'
+# 打包工具
+pyinstaller>=5.1
+# 音频处理
+pygame>=2.1.0  # 用于替代 QSound，提供更好的音频兼容性

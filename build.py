@@ -13,6 +13,7 @@ import platform
 import subprocess
 import logging
 import argparse
+from pathlib import Path
 
 # 配置日志
 logging.basicConfig(
@@ -21,6 +22,10 @@ logging.basicConfig(
     handlers=[logging.StreamHandler()]
 )
 logger = logging.getLogger('build')
+
+# 定义应用名称和版本
+APP_NAME = "辩论赛计时系统"
+APP_VERSION = "1.0.0"
 
 def check_requirements():
     """检查必要的依赖是否已安装"""
@@ -280,6 +285,93 @@ os.environ['PYTHONDONTWRITEBYTECODE'] = '1'  # 避免写入.pyc文件
     logger.info("已创建优化的spec文件: 辩论赛计时系统_optimized.spec")
     return True
 
+def ensure_media_folder():
+    """确保media文件夹存在并包含必要的音频文件"""
+    media_dir = Path("media")
+    media_dir.mkdir(exist_ok=True)
+    
+    # 检查必要的音频文件
+    required_audio = ["noti.wav", "timeover.wav"]
+    missing_files = []
+    
+    for audio_file in required_audio:
+        if not (media_dir / audio_file).exists():
+            missing_files.append(audio_file)
+    
+    if missing_files:
+        logger.warning(f"media文件夹中缺少以下音频文件: {', '.join(missing_files)}")
+        logger.info("请确保这些文件存在，否则应用运行时将没有声音提示。")
+        
+        # 尝试创建默认的音频文件（空文件）
+        for audio_file in missing_files:
+            logger.info(f"创建空白音频文件: {audio_file}")
+            Path(media_dir / audio_file).touch()
+            
+        logger.info("已创建空白音频文件作为占位符。请替换为实际的音频文件。")
+    
+    return str(media_dir.absolute())
+
+def build_application():
+    """构建应用程序"""
+    logger.info(f"开始构建 {APP_NAME} v{APP_VERSION}")
+    
+    # 确保media文件夹存在
+    media_path = ensure_media_folder()
+    
+    # 定义构建参数
+    build_args = [
+        "main.py",  # 入口脚本
+        "--name", APP_NAME,
+        "--windowed",  # 无控制台窗口
+        "--onedir",  # 创建单文件夹分发
+        "--icon=app_icon.ico",  # 应用图标 (如果存在)
+        "--add-data", f"{media_path}{os.pathsep}media",  # 添加media文件夹
+        "--clean",  # 清理临时文件
+        "--noconfirm",  # 不确认覆盖
+    ]
+    
+    # 添加系统特定参数
+    if sys.platform == "win32":
+        build_args.extend([
+            "--uac-admin",  # 请求管理员权限
+            "--version-file=file_version_info.txt",  # 版本信息文件 (如果存在)
+        ])
+    
+    # 添加所有Python文件
+    python_files = []
+    for root, _, files in os.walk("."):
+        if ".git" in root or "__pycache__" in root or "build" in root or "dist" in root:
+            continue
+        for file in files:
+            if file.endswith(".py"):
+                path = os.path.join(root, file)
+                if path != "./build.py":  # 排除构建脚本本身
+                    python_files.append(path)
+    
+    # 执行PyInstaller构建
+    try:
+        PyInstaller.__main__.run(build_args)
+        logger.info(f"构建完成！输出位于 dist/{APP_NAME}")
+        
+        # 复制额外文件到构建目录
+        dist_dir = os.path.join("dist", APP_NAME)
+        readme_path = "README.md"
+        if os.path.exists(readme_path):
+            shutil.copy2(readme_path, dist_dir)
+            logger.info(f"已复制 {readme_path} 到构建目录")
+            
+        # 检查构建是否成功
+        if os.path.exists(os.path.join(dist_dir, f"{APP_NAME}.exe" if sys.platform == "win32" else APP_NAME)):
+            logger.info("✅ 构建成功！")
+        else:
+            logger.warning("❌ 构建似乎成功但找不到输出文件。请检查错误。")
+            
+    except Exception as e:
+        logger.error(f"❌ 构建失败: {e}")
+        return False
+    
+    return True
+
 def main():
     """主函数"""
     parser = argparse.ArgumentParser(description="辩论赛计时系统打包工具 - 带启动性能优化")
@@ -322,4 +414,15 @@ def main():
         sys.exit(1)
 
 if __name__ == "__main__":
-    main()
+    # 检查工作目录
+    if not os.path.exists("main.py"):
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        os.chdir(script_dir)
+        logger.info(f"已切换工作目录到: {script_dir}")
+    
+    # 构建应用
+    if build_application():
+        logger.info("\n构建过程完成。")
+    else:
+        logger.error("\n构建过程失败，请检查错误。")
+        sys.exit(1)
